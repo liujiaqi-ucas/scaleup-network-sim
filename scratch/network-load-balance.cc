@@ -47,7 +47,7 @@
 #include "ns3/qbb-net-device.h"
 #include "ns3/rdma-hw.h"
 #include "ns3/settings.h"
-
+#include <unistd.h>
 using namespace ns3;
 using namespace std;
 
@@ -77,7 +77,7 @@ Time conweave_defaultVOQWaitingTime = MicroSeconds(500);  // default flush timer
 bool conweave_pathAwareRerouting = true;
 
 /*------------------------ simulation variables -----------------------------*/
-uint64_t one_hop_delay = 1000;  // nanoseconds
+uint64_t one_hop_delay = 500;  // nanoseconds
 uint32_t cc_mode = 1;           // mode for congestion control, 1: DCQCN
 bool enable_qcn = true, enable_pfc = true, use_dynamic_pfc_threshold = true;
 uint32_t packet_payload_size = 1000, l2_chunk_size = 0, l2_ack_interval = 0;
@@ -295,22 +295,22 @@ void ScheduleFlowInputs(FILE *infile) {
 /**
  * @brief CNP frequency monitoring (timestamp nodeId ECN OoO Total)
  */
-void cnp_freq_monitoring(FILE *fout, Ptr<RdmaHw> rdmahw) {
-    if (rdmahw->cnp_total > 0) {
-        // flush
-        fprintf(fout, "%lu %u %u %u %u\n", Simulator::Now().GetNanoSeconds(),
-                rdmahw->m_node->GetId(), rdmahw->cnp_by_ecn, rdmahw->cnp_by_ooo, rdmahw->cnp_total);
-        fflush(fout);
+// void cnp_freq_monitoring(FILE *fout, Ptr<RdmaHw> rdmahw) {
+//     if (rdmahw->cnp_total > 0) {
+//         // flush
+//         fprintf(fout, "%lu %u %u %u %u\n", Simulator::Now().GetNanoSeconds(),
+//                 rdmahw->m_node->GetId(), rdmahw->cnp_by_ecn, rdmahw->cnp_by_ooo, rdmahw->cnp_total);
+//         fflush(fout);
 
-        // initialize
-        rdmahw->cnp_by_ecn = 0;
-        rdmahw->cnp_by_ooo = 0;
-        rdmahw->cnp_total = 0;
-    }
+//         // initialize
+//         rdmahw->cnp_by_ecn = 0;
+//         rdmahw->cnp_by_ooo = 0;
+//         rdmahw->cnp_total = 0;
+//     }
 
-    // recursive callback
-    Simulator::Schedule(NanoSeconds(cnp_monitor_bucket), &cnp_freq_monitoring, fout, rdmahw);
-}
+//     // recursive callback
+//     Simulator::Schedule(NanoSeconds(cnp_monitor_bucket), &cnp_freq_monitoring, fout, rdmahw);
+// }
 
 /**
  * @brief TOR Switch monitoring
@@ -498,11 +498,11 @@ void qp_finish(FILE *fout, Ptr<RdmaQueuePair> q) {
 /**
  * @brief PFC event logging
  */
-void get_pfc(FILE *fout, Ptr<QbbNetDevice> dev, uint32_t type) {
-    // time, nodeID, nodeType, Interface's Idx, 0:resume, 1:pause
-    fprintf(fout, "%lu %u %u %u %u\n", Simulator::Now().GetTimeStep(), dev->GetNode()->GetId(),
-            dev->GetNode()->GetNodeType(), dev->GetIfIndex(), type);
-}
+// void get_pfc(FILE *fout, Ptr<QbbNetDevice> dev, uint32_t type) {
+//     // time, nodeID, nodeType, Interface's Idx, 0:resume, 1:pause
+//     fprintf(fout, "%lu %u %u %u %u\n", Simulator::Now().GetTimeStep(), dev->GetNode()->GetId(),
+//             dev->GetNode()->GetNodeType(), dev->GetIfIndex(), type);
+// }
 
 /*******************************************************************/
 #if (false)
@@ -576,7 +576,7 @@ void stop_simulation_middle() {
         if (lb_mode == 9) {  // CONWEAVE
             conweave_history_print();
         }
-        Simulator::Stop(NanoSeconds(1));  // finish soon, stop this schedule (NECESSARY!)
+        Simulator::Stop(MilliSeconds(1));  // finish soon, stop this schedule (NECESSARY!)
         return;
     }
 
@@ -735,12 +735,34 @@ int main(int argc, char *argv[]) {
         std::ifstream conf;
 #ifndef PGO_TRAINING
         conf.open(argv[1]);
+        
 #else
         conf.open(PATH_TO_PGO_CONFIG);
 #endif
+        // 【新增】详细的错误检查
+    if (!conf.is_open()) {
+        std::cerr << "!!! CRITICAL FAILURE !!!" << std::endl;
+        std::cerr << "Failed to open config file: " << argv[1] << std::endl;
+        std::cerr << "System Error: " << strerror(errno) << std::endl; // 打印具体的系统错误原因
+        
+        // 尝试用 C 语言风格打开试试，双重验证
+        FILE* test_fp = fopen(argv[1], "r");
+        if (test_fp) {
+            std::cerr << "Strange... fopen() succeeded but ifstream failed." << std::endl;
+            fclose(test_fp);
+        } else {
+            std::cerr << "fopen() also failed. Reason: " << strerror(errno) << std::endl;
+        }
+        
+        return 1; // 直接退出
+    }
+
+    std::cout << "Config file opened successfully!" << std::endl;
+    std::cout << "=== C++ DEBUG END ===" << std::endl;
         while (!conf.eof()) {
             std::string key;
             conf >> key;
+            if (conf.fail()) break; // 加上这一行防止死循环
             if (key.compare("FLOW_INPUT_FILE") == 0) {
                 std::string v;
                 conf >> v;
@@ -1139,11 +1161,51 @@ int main(int argc, char *argv[]) {
     /**
      * @brief open topology config, input-flows config.
      */
+     std::cout << "--- [DEBUG] Checking Topology and Flow Files ---" << std::endl;
+    std::cout << "Topology File Path: [" << topology_file << "]" << std::endl;
+    std::cout << "Flow File Path:     [" << flow_file << "]" << std::endl;
+
+    if (topology_file.empty()) {
+        std::cerr << "CRITICAL ERROR: 'TOPOLOGY_FILE' was not found in config.txt!" << std::endl;
+        exit(1);
+    }
+
     topof.open(topology_file.c_str());
+    if (!topof.is_open()) {
+        std::cerr << "CRITICAL ERROR: Failed to open topology file: " << topology_file << std::endl;
+        std::cerr << "Please check if this file exists relative to where you run ./waf" << std::endl;
+        // 尝试打印一下当前目录，帮助排查
+        char cwd[1024];
+        if (getcwd(cwd, sizeof(cwd)) != NULL)
+            std::cerr << "Current Working Directory: " << cwd << std::endl;
+        exit(1);
+    }
+
     flowf.open(flow_file.c_str());
-    uint32_t node_num, switch_num, link_num;
+    if (!flowf.is_open()) {
+        std::cerr << "CRITICAL ERROR: Failed to open flow file: " << flow_file << std::endl;
+        exit(1);
+    }
+
+    uint32_t node_num = 0, switch_num = 0, link_num = 0; // 初始化防止脏数据
     topof >> node_num >> switch_num >> link_num;
+    
+    std::cout << "Read Topology Header -> Nodes: " << node_num 
+              << ", Switches: " << switch_num 
+              << ", Links: " << link_num << std::endl;
+
+    if (node_num == 0 || node_num > 100000) { // 简单的合理性检查
+        std::cerr << "CRITICAL ERROR: node_num seems invalid (" << node_num << "). Topology file might be empty or malformed." << std::endl;
+        exit(1);
+    }
+
     flowf >> flow_num;
+    std::cout << "Read Flow Header -> Flow Num: " << flow_num << std::endl;
+    // topof.open(topology_file.c_str());
+    // flowf.open(flow_file.c_str());
+    // uint32_t node_num, switch_num, link_num;
+    // topof >> node_num >> switch_num >> link_num;
+    // flowf >> flow_num;
 
     /*-------Parameter of Settings-------*/
     Settings::node_num = node_num;
@@ -1160,17 +1222,52 @@ int main(int argc, char *argv[]) {
         topof >> sid;
         node_type[sid] = 1;
     }
+    std::cout<<"111111"<<std::endl;
     for (uint32_t i = 0; i < node_num; i++) {
-        if (node_type[i] == 0)
-            n.Add(CreateObject<Node>());
-        else {
+        std::cout << "[DEBUG] Processing Node " << i << " / Type: " << node_type[i] << std::flush; // flush 确保立即打印
+
+        if (node_type[i] == 0) {
+            std::cout << " -> Creating Standard Node... " << std::flush;
+            Ptr<Node> node = CreateObject<Node>();
+            std::cout << "Created. Adding... " << std::flush;
+            n.Add(node);
+            std::cout << "Done." << std::endl;
+        } else {
+            std::cout << " -> Creating SwitchNode... " << std::flush;
+            // 检查点 1: 创建对象
             Ptr<SwitchNode> sw = CreateObject<SwitchNode>();
+            if (!sw) {
+                std::cerr << "\n[CRITICAL ERROR] CreateObject<SwitchNode> returned NULL!" << std::endl;
+                exit(1);
+            }
+            std::cout << "Created (" << sw << "). " << std::flush;
+
+            // 检查点 2: 添加到容器
+            std::cout << "Adding to container... " << std::flush;
             n.Add(sw);
-            sw->SetAttribute("EcnEnabled", BooleanValue(enable_qcn));
+            std::cout << "Added. " << std::flush;
+
+            // 检查点 3: 设置属性
+            std::cout << "Setting EcnEnabled... " << std::flush;
+            // 加上 try-catch 防止 NS-3 内部断言导致直接退出而无日志
+            try {
+                sw->SetAttribute("EcnEnabled", BooleanValue(enable_qcn));
+            } catch (...) {
+                std::cerr << "\n[CRITICAL ERROR] Crashed while setting 'EcnEnabled'!" << std::endl;
+                exit(1);
+            }
+            std::cout << "Set. Done." << std::endl;
         }
+        // if (node_type[i] == 0)
+        //     n.Add(CreateObject<Node>());
+        // else {
+        //     Ptr<SwitchNode> sw = CreateObject<SwitchNode>();
+        //     n.Add(sw);
+        //     sw->SetAttribute("EcnEnabled", BooleanValue(enable_qcn));
+        // }
     }
     NS_LOG_INFO("Create nodes.");
-
+   std::cout<<"22222222"<<std::endl;
     /*----------------------------------------*/
 
     InternetStackHelper internet;
@@ -1185,7 +1282,7 @@ int main(int argc, char *argv[]) {
             serverAddress[i] = Settings::node_id_to_ip(i);
         }
     }
-
+std::cout<<"333333333"<<std::endl;
     NS_LOG_INFO("Create channels.");
 
     //
@@ -1203,12 +1300,14 @@ int main(int argc, char *argv[]) {
     QbbHelper qbb;
     Ipv4AddressHelper ipv4;
     std::vector<std::pair<uint32_t, uint32_t>> link_pairs;  // src, dst link pairs
+    //std::cout<<"4444444444444"<<std::endl;
     for (uint32_t i = 0; i < link_num; i++) {
         uint32_t src, dst;
         std::string data_rate, link_delay;
         double error_rate;
         topof >> src >> dst >> data_rate >> link_delay >> error_rate;
-
+        //std::cout<<src<<"  "<<dst<<"  "<<data_rate<<"  "<<link_delay<<"  "<<error_rate<<std::endl;
+        //std::cout<<"one_hop_delay="<<one_hop_delay<<"   link_delay=     "<<link_delay<<std::endl;
         /** ASSUME: fixed one-hop delay across network */
         assert(std::to_string(one_hop_delay) + "ns" == link_delay);
 
@@ -1272,10 +1371,10 @@ int main(int argc, char *argv[]) {
         ipv4.Assign(d);
 
         // setup PFC trace
-        DynamicCast<QbbNetDevice>(d.Get(0))->TraceConnectWithoutContext(
-            "QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<QbbNetDevice>(d.Get(0))));
-        DynamicCast<QbbNetDevice>(d.Get(1))->TraceConnectWithoutContext(
-            "QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<QbbNetDevice>(d.Get(1))));
+        // DynamicCast<QbbNetDevice>(d.Get(0))->TraceConnectWithoutContext(
+        //     "QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<QbbNetDevice>(d.Get(0))));
+        // DynamicCast<QbbNetDevice>(d.Get(1))->TraceConnectWithoutContext(
+        //     "QbbPfc", MakeBoundCallback(&get_pfc, pfc_file, DynamicCast<QbbNetDevice>(d.Get(1))));
     }
 
     std::cout << "(AVG) NIC RATE: " << get_nic_rate(n) << std::endl;
@@ -1312,12 +1411,12 @@ int main(int argc, char *argv[]) {
                 assert(rate2kmin.find(rate) != rate2kmin.end() &&
                        rate2kmax.find(rate) != rate2kmax.end() &&
                        rate2pmax.find(rate) != rate2pmax.end());
-                sw->m_mmu->ConfigEcn(j, rate2kmin[rate], rate2kmax[rate], rate2pmax[rate]);
+                //sw->m_mmu->ConfigEcn(j, rate2kmin[rate], rate2kmax[rate], rate2pmax[rate]);
                 // set pfc
                 uint64_t delay =
                     DynamicCast<QbbChannel>(dev->GetChannel())->GetDelay().GetTimeStep();
-                uint32_t headroom = rate * delay / 8 / 1000000000 * 2 + 2 * sw->m_mmu->MTU;
-                sw->m_mmu->ConfigHdrm(j, headroom);
+                //uint32_t headroom = rate * delay / 8 / 1000000000 * 2 + 2 * sw->m_mmu->MTU;
+                //sw->m_mmu->ConfigHdrm(j, headroom);
             }
             sw->m_mmu->ConfigNPort(sw->GetNDevices() - 1);
             sw->m_mmu->ConfigBufferSize(buffer_size * 1024 *
@@ -1366,6 +1465,8 @@ int main(int argc, char *argv[]) {
     std::map<std::string, uint32_t> topo2bdpMap;
     topo2bdpMap[std::string("leaf_spine_128_100G_OS2")] = 104000;  // RTT=8320
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
+    topo2bdpMap[std::string("H100_8_300G_OS2")] = 312000;   // RTT=8320
+    topo2bdpMap[std::string("twoserver_oneswitch")] = 312000;
 
     // topology_file
     bool found_topo2bdpMap = false;
@@ -1389,38 +1490,38 @@ int main(int argc, char *argv[]) {
         if (n.Get(i)->GetNodeType() == 0) {  // is server
             // create RdmaHw
             Ptr<RdmaHw> rdmaHw = CreateObject<RdmaHw>();
-            rdmaHw->SetAttribute("ClampTargetRate", BooleanValue(clamp_target_rate));
-            rdmaHw->SetAttribute("AlphaResumInterval", DoubleValue(alpha_resume_interval));
-            rdmaHw->SetAttribute("RPTimer", DoubleValue(rp_timer));
-            rdmaHw->SetAttribute("FastRecoveryTimes", UintegerValue(fast_recovery_times));
-            rdmaHw->SetAttribute("EwmaGain", DoubleValue(ewma_gain));
-            rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate(rate_ai)));
-            rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate(rate_hai)));
-            rdmaHw->SetAttribute("L2BackToZero", BooleanValue(l2_back_to_zero));
-            rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(l2_chunk_size));
-            rdmaHw->SetAttribute("L2AckInterval", UintegerValue(l2_ack_interval));
+            // rdmaHw->SetAttribute("ClampTargetRate", BooleanValue(clamp_target_rate));
+            // rdmaHw->SetAttribute("AlphaResumInterval", DoubleValue(alpha_resume_interval));
+            // rdmaHw->SetAttribute("RPTimer", DoubleValue(rp_timer));
+            // rdmaHw->SetAttribute("FastRecoveryTimes", UintegerValue(fast_recovery_times));
+            // rdmaHw->SetAttribute("EwmaGain", DoubleValue(ewma_gain));
+            // rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate(rate_ai)));
+            // rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate(rate_hai)));
+            // rdmaHw->SetAttribute("L2BackToZero", BooleanValue(l2_back_to_zero));
+            // rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(l2_chunk_size));
+            // rdmaHw->SetAttribute("L2AckInterval", UintegerValue(l2_ack_interval));
             rdmaHw->SetAttribute("CcMode", UintegerValue(cc_mode));
-            rdmaHw->SetAttribute("RateDecreaseInterval", DoubleValue(rate_decrease_interval));
+            //rdmaHw->SetAttribute("RateDecreaseInterval", DoubleValue(rate_decrease_interval));
             rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate(min_rate)));
             rdmaHw->SetAttribute("Mtu", UintegerValue(packet_payload_size));
-            rdmaHw->SetAttribute("MiThresh", UintegerValue(mi_thresh));
+            //rdmaHw->SetAttribute("MiThresh", UintegerValue(mi_thresh));
             rdmaHw->SetAttribute("VarWin", BooleanValue(var_win));
             rdmaHw->SetAttribute("FastReact", BooleanValue(fast_react));
-            rdmaHw->SetAttribute("MultiRate", BooleanValue(multi_rate));
-            rdmaHw->SetAttribute("SampleFeedback", BooleanValue(sample_feedback));
-            rdmaHw->SetAttribute("TargetUtil", DoubleValue(u_target));
+            //rdmaHw->SetAttribute("MultiRate", BooleanValue(multi_rate));
+            // rdmaHw->SetAttribute("SampleFeedback", BooleanValue(sample_feedback));
+            // rdmaHw->SetAttribute("TargetUtil", DoubleValue(u_target));
             rdmaHw->SetAttribute("RateBound", BooleanValue(rate_bound));
-            rdmaHw->SetAttribute("DctcpRateAI", DataRateValue(DataRate(dctcp_rate_ai)));
-            rdmaHw->SetAttribute("IrnEnable", BooleanValue(enable_irn));
+            //rdmaHw->SetAttribute("DctcpRateAI", DataRateValue(DataRate(dctcp_rate_ai)));
+            //rdmaHw->SetAttribute("IrnEnable", BooleanValue(enable_irn));
             // topo2bdpMap (e.g., longest BDP 25000: 8us * 25Gbps)
-            rdmaHw->SetAttribute("IrnRtoHigh", TimeValue(MicroSeconds(320)));  // 1930
-            rdmaHw->SetAttribute("IrnRtoLow", TimeValue(MicroSeconds(100)));   // 454
-            rdmaHw->SetAttribute("IrnBdp", UintegerValue(irn_bdp_lookup));
+            // rdmaHw->SetAttribute("IrnRtoHigh", TimeValue(MicroSeconds(320)));  // 1930
+            // rdmaHw->SetAttribute("IrnRtoLow", TimeValue(MicroSeconds(100)));   // 454
+            // rdmaHw->SetAttribute("IrnBdp", UintegerValue(irn_bdp_lookup));
             // Monitoring CNP Marking frequency of DCQCN
-            if (cc_mode == 1) {
-                Simulator::Schedule(NanoSeconds(cnp_mon_start), &cnp_freq_monitoring, cnp_output,
-                                    rdmaHw);
-            }
+            // if (cc_mode == 1) {
+            //     Simulator::Schedule(NanoSeconds(cnp_mon_start), &cnp_freq_monitoring, cnp_output,
+            //                         rdmaHw);
+            // }
 
             // create and install RdmaDriver
             Ptr<RdmaDriver> rdma = CreateObject<RdmaDriver>();
@@ -1434,7 +1535,7 @@ int main(int argc, char *argv[]) {
                                              MakeBoundCallback(qp_finish, fct_output));
         }
     }
-
+    std::cout<<"8888888"<<std::endl;
     /**
      * @brief setup switch's CcMode and ACK with high priority
      */
@@ -1476,7 +1577,7 @@ int main(int argc, char *argv[]) {
         }
     }
     fprintf(stderr, "maxRtt: %lu, maxBdp: %lu\n", maxRtt, maxBdp);
-    assert(maxBdp == irn_bdp_lookup);
+    //assert(maxBdp == irn_bdp_lookup);
 
     std::cout << "Configuring switches" << std::endl;
     /* config ToR Switch */

@@ -444,7 +444,7 @@ protected:
   bool m_linkUp;
   TracedCallback<> m_linkChangeCallbacks;
 
-  static const uint16_t DEFAULT_MTU = 1500;
+  static const uint16_t DEFAULT_MTU = 1440;
 
   /**
    * The Maximum Transmission Unit.  This corresponds to the maximum 

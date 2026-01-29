@@ -303,7 +303,7 @@ void QbbHelper::GetTraceFromPacket(TraceFormat &tr, Ptr<QbbNetDevice> dev, Ptr<c
             tr.data.payload = p->GetSize() - hdr.GetSerializedSize();
             // SeqTsHeader
             tr.data.seq = hdr.udp.seq;
-            tr.data.ts = hdr.udp.ih.GetTs();
+            //tr.data.ts = hdr.udp.ih.GetTs();
             tr.data.pg = hdr.udp.pg;
             break;
         case 0xFC:

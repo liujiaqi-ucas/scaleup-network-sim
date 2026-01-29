@@ -79,7 +79,11 @@ DropTailQueue::GetMode (void)
   NS_LOG_FUNCTION_NOARGS ();
   return m_mode;
 }
-
+uint32_t
+DropTailQueue::GetNPackets (void) const
+{
+  return m_packets.size ();
+}
 bool 
 DropTailQueue::DoEnqueue (Ptr<Packet> p)
 {

@@ -49,7 +49,7 @@ public:
   /**
    * \return the time stamp
    */
-  Time GetTs (void) const;
+  //Time GetTs (void) const;
 
   void SetPG (uint16_t pg);
   uint16_t GetPG () const;
@@ -66,7 +66,7 @@ private:
   uint32_t m_seq;
   uint16_t m_pg;
 public:
-  IntHeader ih;
+  //IntHeader ih;
 };
 
 } // namespace ns3

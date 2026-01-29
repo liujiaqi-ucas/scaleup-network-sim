@@ -15,7 +15,7 @@ import argparse
 from datetime import date
 
 # randomID
-random.seed(datetime.now())
+random.seed(datetime.now().timestamp())
 MAX_RAND_RANGE = 1000000000
 
 # config template
@@ -79,9 +79,9 @@ U_TARGET 0.95
 MULTI_RATE 0
 SAMPLE_FEEDBACK 0
 
-ENABLE_QCN 1
+ENABLE_QCN {enable_qcn}
 USE_DYNAMIC_PFC_THRESHOLD 1
-PACKET_PAYLOAD_SIZE 1000
+PACKET_PAYLOAD_SIZE 1392
 
 
 LINK_DOWN 0 0 0
@@ -95,6 +95,7 @@ RANDOM_SEED 1
 
 # LB/CC mode matching
 cc_modes = {
+    "none": 0,
     "dcqcn": 1,
     "hpcc": 3,
     "timely": 7,
@@ -112,6 +113,8 @@ lb_modes = {
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,  # 2-tier -> all 100Gbps
     "fat_k8_100G_OS2": 156000,  # 3-tier -> all 100Gbps
+    "H100_8_300G_OS2": 312000, 
+    "twoserver_oneswitch_OS2":312000,
 }
 
 FLOWGEN_DEFAULT_TIME = 2.0  # see /traffic_gen/traffic_gen.py::base_t
@@ -123,16 +126,16 @@ def main():
     if not isExist:
         os.makedirs(os.getcwd() + "/mix/output/")
         print("The new directory is created - {}".format(os.getcwd() + "/mix/output/"))
-
+    print("666666666")
     parser = argparse.ArgumentParser(description='run simulation')
     parser.add_argument('--cc', dest='cc', action='store',
-                        default='dcqcn', help="hpcc/dcqcn/timely/dctcp (default: dcqcn)")
+                        default='none', help="hpcc/dcqcn/timely/dctcp/none (default: none)")
     parser.add_argument('--lb', dest='lb', action='store',
                         default='fecmp', help="fecmp/pecmp/drill/conga (default: fecmp)")
     parser.add_argument('--pfc', dest='pfc', action='store',
-                        type=int, default=1, help="enable PFC (default: 1)")
+                         type=int, default=0, help="enable PFC (default: 1)")
     parser.add_argument('--irn', dest='irn', action='store',
-                        type=int, default=0, help="enable IRN (default: 0)")
+                         type=int, default=0, help="enable IRN (default: 0)")
     parser.add_argument('--simul_time', dest='simul_time', action='store',
                         default='0.1', help="traffic time to simulate (up to 3 seconds) (default: 0.1)")
     parser.add_argument('--buffer', dest="buffer", action='store',
@@ -140,7 +143,7 @@ def main():
     parser.add_argument('--netload', dest='netload', action='store', type=int,
                         default=40, help="Network load at NIC to generate traffic (default: 40.0)")
     parser.add_argument('--bw', dest="bw", action='store',
-                        default='100', help="the NIC bandwidth (Gbps) (default: 100)")
+                        default='200', help="the NIC bandwidth (Gbps) (default: 100)")
     parser.add_argument('--topo', dest='topo', action='store',
                         default='leaf_spine_128_100G', help="the name of the topology file (default: leaf_spine_128_100G_OS2)")
     parser.add_argument('--cdf', dest='cdf', action='store',
@@ -149,7 +152,7 @@ def main():
                         type=int, default=0, help="enforce to use window scheme (default: 0)")
     parser.add_argument('--sw_monitoring_interval', dest='sw_monitoring_interval', action='store',
                         type=int, default=10000, help="interval of sampling statistics for queue status (default: 10000ns)")
-
+    print("77777777")
     # #### CONWEAVE PARAMETERS ####
     # parser.add_argument('--cwh_extra_reply_deadline', dest='cwh_extra_reply_deadline', action='store',
     #                     type=int, default=4, help="extra-timeout, where reply_deadline = base-RTT + extra-timeout (default: 4us)")
@@ -171,7 +174,7 @@ def main():
     while (isExist):
         config_ID = str(random.randrange(MAX_RAND_RANGE))
         isExist = os.path.exists(os.getcwd() + "/mix/output/" + config_ID)
-
+    print("888888888")
     # input parameters
     cc_mode = cc_modes[args.cc]
     lb_mode = lb_modes[args.lb]
@@ -194,17 +197,17 @@ def main():
     assert (int(args.netload) % oversub == 0)
     hostload = int(args.netload) / oversub
     assert (hostload > 0)
-
+    print("9999999999")
     # Sanity checks
     if (args.cc == "timely" or args.cc == "hpcc") and args.lb == "conweave":
         raise Exception(
             "CONFIG ERROR : ConWeave currently does not support RTT-based protocols. Plz modify its logic accordingly.")
-    if enabled_irn == 1 and enabled_pfc == 1:
-        raise Exception(
-            "CONFIG ERROR : If IRN is turn-on, then you should turn off PFC (for better perforamnce).")
-    if enabled_irn == 0 and enabled_pfc == 0:
-        raise Exception(
-            "CONFIG ERROR : Either IRN or PFC should be true (at least one).")
+    # if enabled_irn == 1 and enabled_pfc == 1:
+    #     raise Exception(
+    #         "CONFIG ERROR : If IRN is turn-on, then you should turn off PFC (for better perforamnce).")
+    # if enabled_irn == 0 and enabled_pfc == 0:
+    #     raise Exception(
+    #         "CONFIG ERROR : Either IRN or PFC should be true (at least one).")
     if float(args.simul_time) < 0.005:
         raise Exception("CONFIG ERROR : Runtime must be larger than 5ms (= warmup interval).")
 
@@ -348,17 +351,27 @@ def main():
     # queue monitoring
     qlen_mon_start = flowgen_start_time
     qlen_mon_end = flowgen_stop_time
-
+    
+    ai = 10 * bw / 25
+    hai = 25 * bw / 25
+    dctcp_ai = 1000
+    fast_react = 0
+    mi = 0
+    int_multi = 0
+    ewma_gain = 0.00390625
+    enable_qcn = 0
     if (cc_mode == 1):  # DCQCN
-        ai = 10 * bw / 25
-        hai = 25 * bw / 25
-        dctcp_ai = 1000
-        fast_react = 0
-        mi = 0
+        enable_qcn = 1 # 只有 DCQCN 开启 QCN
         int_multi = 1
-        ewma_gain = 0.00390625
+        # ... 其他 DCQCN 参数 ...
+    elif (cc_mode == 0): # None
+        print("Running with NO Congestion Control")
+        # 参数保持默认 0 即可
+    else:
+        print("unknown or unsupported cc in this script version:{}".format(args.cc))
 
-        config = config_template.format(id=config_ID, topo=topo, flow=flow,
+    
+    config = config_template.format(id=config_ID, topo=topo, flow=flow,
                                         qlen_mon_start=qlen_mon_start, qlen_mon_end=qlen_mon_end, flowgen_start_time=flowgen_start_time,
                                         flowgen_stop_time=flowgen_stop_time, sw_monitoring_interval=sw_monitoring_interval,
                                         load=netload, buffer_size=buffer, lb_mode=lb_mode, cwh_tx_expiry_time=cwh_tx_expiry_time,
@@ -368,14 +381,10 @@ def main():
                                         cc_mode=cc_mode,
                                         ai=ai, hai=hai, dctcp_ai=dctcp_ai,
                                         has_win=has_win, var_win=var_win,
-                                        fast_react=fast_react, mi=mi, int_multi=int_multi, ewma_gain=ewma_gain,
+                                        fast_react=fast_react, mi=mi, int_multi=int_multi, ewma_gain=ewma_gain,enable_qcn=enable_qcn,
                                         kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map)
-    else:
-        print("unknown cc:{}".format(args.cc))
-
     with open(config_name, "w") as file:
         file.write(config)
-
     # run program
     print("Running simulation...")
     output_log = config_name.replace(".txt", ".log")

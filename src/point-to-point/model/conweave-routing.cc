@@ -260,7 +260,7 @@ void ConWeaveRouting::SendReply(Ptr<Packet> p, CustomHeader &ch, uint32_t flagRe
     seqh.SetPG(ch.udp.pg);
     seqh.SetSport(ch.udp.dport);
     seqh.SetDport(ch.udp.sport);
-    seqh.SetIntHeader(ch.udp.ih);
+    //seqh.SetIntHeader(ch.udp.ih);
 
     Ptr<Packet> replyP = Create<Packet>(
         std::max(64 - 14 - 20 - (int)seqh.GetSerializedSize(), 0));  // at least 64 Bytes
@@ -318,7 +318,7 @@ void ConWeaveRouting::SendNotify(Ptr<Packet> p, CustomHeader &ch, uint32_t pathI
     seqh.SetPG(ch.udp.pg);
     seqh.SetSport(ch.udp.dport);
     seqh.SetDport(ch.udp.sport);
-    seqh.SetIntHeader(ch.udp.ih);
+    //seqh.SetIntHeader(ch.udp.ih);
 
     Ptr<Packet> fbP = Create<Packet>(
         std::max(64 - 14 - 20 - (int)seqh.GetSerializedSize(), 0));  // at least 64 Bytes

@@ -238,8 +238,8 @@ void Ping6::HandleRead (Ptr<Socket> socket)
           Ipv6Header hdr;
           Icmpv6Echo reply (0);
           Inet6SocketAddress address = Inet6SocketAddress::ConvertFrom (from);
-
           packet->RemoveHeader (hdr);
+
 
           uint8_t type;
           packet->CopyData (&type, sizeof(type));

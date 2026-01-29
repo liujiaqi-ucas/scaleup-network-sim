@@ -85,77 +85,154 @@ bool BEgressQueue::DoEnqueue(Ptr<Packet> p, uint32_t qIndex) {
     }
     return true;
 }
-
+// 【新增】实现获取子队列
+Ptr<Queue>
+BEgressQueue::GetQueue(uint32_t qIndex) const {
+    if (qIndex < fCnt) {
+        return m_queues[qIndex];
+    }
+    return 0; // 或者抛出异常/断言
+}
 Ptr<Packet>
 BEgressQueue::DoDequeueRR(bool paused[])  // this is for switch only
 {
     NS_LOG_FUNCTION(this);
 
+    // 1. 全局判空（性能优化）
     if (m_bytesInQueueTotal == 0) {
-        NS_LOG_LOGIC("Queue empty");
         return 0;
     }
-    bool found = false;
-    uint32_t qIndex;
 
-    if (m_queues[0]->GetNPackets() > 0)  // 0 is the highest priority
+    bool found = false;
+    uint32_t qIndex = 0;
+
+    // ============================================================
+    // 优先级 1: 严格优先级 (Strict Priority) - Queue 0
+    // ============================================================
+    // 只要 Queue 0 有包，无条件优先发送
+    if (m_queues[0]->GetNPackets() > 0) 
     {
         found = true;
         qIndex = 0;
-    } else {
-        if (!found) {
-            for (qIndex = 1; qIndex <= qCnt; qIndex++) {
-                bool cond1 = !paused[(qIndex + m_rrlast) % qCnt];
-                bool cond2 = m_queues[(qIndex + m_rrlast) % qCnt]->GetNPackets() > 0;  // round robin
+    } 
+    // ============================================================
+    // 优先级 2: 轮询调度 (Round Robin) - Queue 1 ~ N
+    // ============================================================
+    else 
+    {
+        // 只有当 Queue 0 为空时，才轮询其他队列
+        // 遍历所有可能的队列索引
+        for (uint32_t i = 1; i <= qCnt; i++) {
+            
+            // 计算当前检查的索引 (从上次服务位置 m_rrlast 的下一个开始)
+            uint32_t curr = (i + m_rrlast) % qCnt;
 
-                if (!cond1 && cond2) {
-                    // Packet could be scheduled by RR, but could not be scheduled because of PAUSE
-                    FlowIDNUMTag fit;
-                    Ptr<Packet> p = ConstCast<Packet, const Packet>(m_queues[(qIndex + m_rrlast) % qCnt]->Peek());
-                    if (p->PeekPacketTag(fit)) {
-                        unsigned flowid = static_cast<unsigned>(fit.GetId());
-                        if (!MAP_KEY_EXISTS(current_pause_time, flowid))
-                            current_pause_time[flowid] = Simulator::Now();
-                    }
-                } else if (cond1 && cond2) {
-                    found = true;
-                    break;
-                }
+            // 如果算出来是 0，跳过（因为 Queue 0 已经在上面处理过了，且为空）
+            if (curr == 0) continue;
+
+            // 【核心修改】：只检查是否有包，不再检查 !paused[curr]
+            if (m_queues[curr]->GetNPackets() > 0) {
+                qIndex = curr;
+                found = true;
+                break; // 找到了，跳出循环
             }
-            qIndex = (qIndex + m_rrlast) % qCnt;
         }
     }
+
+    // ============================================================
+    // 执行出队 (Action)
+    // ============================================================
     if (found) {
         Ptr<Packet> p = m_queues[qIndex]->Dequeue();
 
-        // Check if the flow has been blocked by PFC
-        if (p) {
-            FlowIDNUMTag fit;
-            if (p->PeekPacketTag(fit)) {
-                unsigned flowid = static_cast<unsigned>(fit.GetId());
-                if (MAP_KEY_EXISTS(current_pause_time, flowid)) {
-                    Time tdiff = Simulator::Now() - current_pause_time[flowid];
-                    if (!MAP_KEY_EXISTS(acc_pause_time, flowid))
-                        acc_pause_time[flowid] = Seconds(0);
-                    acc_pause_time[flowid] = acc_pause_time[flowid] + tdiff;
-                    current_pause_time.erase(flowid);
-                }
-            }
-        }
-
+        // 1. 触发 Trace (记录出队事件)
         m_traceBeqDequeue(p, qIndex);
+
+        // 2. 更新字节计数器
         m_bytesInQueueTotal -= p->GetSize();
         m_bytesInQueue[qIndex] -= p->GetSize();
+
+        // 3. 更新 RR 指针
+        // 【重要】：只有服务的不是 Queue 0 时才移动指针，保证公平性
         if (qIndex != 0) {
             m_rrlast = qIndex;
         }
+        
+        // 记录最后服务的队列 (用于 Logging 或其他逻辑)
         m_qlast = qIndex;
+
         NS_LOG_LOGIC("Popped " << p);
-        NS_LOG_LOGIC("Number bytes " << m_bytesInQueueTotal);
         return p;
     }
-    NS_LOG_LOGIC("Nothing can be sent");
+
     return 0;
+    // NS_LOG_FUNCTION(this);
+
+    // if (m_bytesInQueueTotal == 0) {
+    //     NS_LOG_LOGIC("Queue empty");
+    //     return 0;
+    // }
+    // bool found = false;
+    // uint32_t qIndex;
+
+    // if (m_queues[0]->GetNPackets() > 0)  // 0 is the highest priority
+    // {
+    //     found = true;
+    //     qIndex = 0;
+    // } else {
+    //     if (!found) {
+    //         for (qIndex = 1; qIndex <= qCnt; qIndex++) {
+    //             bool cond1 = !paused[(qIndex + m_rrlast) % qCnt];
+    //             bool cond2 = m_queues[(qIndex + m_rrlast) % qCnt]->GetNPackets() > 0;  // round robin
+
+    //             if (!cond1 && cond2) {
+    //                 // Packet could be scheduled by RR, but could not be scheduled because of PAUSE
+    //                 FlowIDNUMTag fit;
+    //                 Ptr<Packet> p = ConstCast<Packet, const Packet>(m_queues[(qIndex + m_rrlast) % qCnt]->Peek());
+    //                 if (p->PeekPacketTag(fit)) {
+    //                     unsigned flowid = static_cast<unsigned>(fit.GetId());
+    //                     if (!MAP_KEY_EXISTS(current_pause_time, flowid))
+    //                         current_pause_time[flowid] = Simulator::Now();
+    //                 }
+    //             } else if (cond1 && cond2) {
+    //                 found = true;
+    //                 break;
+    //             }
+    //         }
+    //         qIndex = (qIndex + m_rrlast) % qCnt;
+    //     }
+    // }
+    // if (found) {
+    //     Ptr<Packet> p = m_queues[qIndex]->Dequeue();
+
+    //     // Check if the flow has been blocked by PFC
+    //     if (p) {
+    //         FlowIDNUMTag fit;
+    //         if (p->PeekPacketTag(fit)) {
+    //             unsigned flowid = static_cast<unsigned>(fit.GetId());
+    //             if (MAP_KEY_EXISTS(current_pause_time, flowid)) {
+    //                 Time tdiff = Simulator::Now() - current_pause_time[flowid];
+    //                 if (!MAP_KEY_EXISTS(acc_pause_time, flowid))
+    //                     acc_pause_time[flowid] = Seconds(0);
+    //                 acc_pause_time[flowid] = acc_pause_time[flowid] + tdiff;
+    //                 current_pause_time.erase(flowid);
+    //             }
+    //         }
+    //     }
+
+    //     m_traceBeqDequeue(p, qIndex);
+    //     m_bytesInQueueTotal -= p->GetSize();
+    //     m_bytesInQueue[qIndex] -= p->GetSize();
+    //     if (qIndex != 0) {
+    //         m_rrlast = qIndex;
+    //     }
+    //     m_qlast = qIndex;
+    //     NS_LOG_LOGIC("Popped " << p);
+    //     NS_LOG_LOGIC("Number bytes " << m_bytesInQueueTotal);
+    //     return p;
+    // }
+    // NS_LOG_LOGIC("Nothing can be sent");
+    // return 0;
 }
 
 bool BEgressQueue::Enqueue(Ptr<Packet> p, uint32_t qIndex) {

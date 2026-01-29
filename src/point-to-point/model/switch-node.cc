@@ -35,25 +35,64 @@ TypeId SwitchNode::GetTypeId(void) {
 }
 
 SwitchNode::SwitchNode() {
+    // 1. 先创建对象！
+    m_mmu = CreateObject<SwitchMmu>();
+    
+    // 2. 只有创建了之后，才能调用它的方法
+    m_mmu->SetNode(this);
     m_ecmpSeed = m_id;
     m_isToR = false;
     m_node_type = 1;
     m_isToR = false;
     m_drill_candidate = 2;
-    m_mmu = CreateObject<SwitchMmu>();
+    
     // Conga's Callback for switch functions
-    m_mmu->m_congaRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
-    m_mmu->m_congaRouting.SetSwitchSendToDevCallback(
-        MakeCallback(&SwitchNode::SendToDevContinue, this));
+    //m_mmu->m_congaRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
+    //m_mmu->m_congaRouting.SetSwitchSendToDevCallback(
+        //MakeCallback(&SwitchNode::SendToDevContinue, this));
     // ConWeave's Callback for switch functions
-    m_mmu->m_conweaveRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
-    m_mmu->m_conweaveRouting.SetSwitchSendToDevCallback(
-        MakeCallback(&SwitchNode::SendToDevContinue, this));
-
+    //m_mmu->m_conweaveRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
+    //m_mmu->m_conweaveRouting.SetSwitchSendToDevCallback(
+        //MakeCallback(&SwitchNode::SendToDevContinue, this));
+// 你的逻辑依赖于 -1 代表空闲，如果不初始化，里面是随机垃圾值，一开始就会导致锁死
+    for (uint32_t i = 0; i < pCnt; i++) {
+        m_portOccupancy[i] = -1; 
+    }
     for (uint32_t i = 0; i < pCnt; i++) {
         m_txBytes[i] = 0;
     }
+    // 初始化账本
+    for(int i=0; i<pCnt; i++)
+        for(int j=0; j<qCnt; j++)
+            m_cumulativeFreedBytes[i][j] = 0;
+    for (uint32_t i = 0; i < pCnt; i++) {
+        m_connectionTable[i].outDev = 0;     // 设为0或安全值
+        m_connectionTable[i].qIndex = 0;
+        m_connectionTable[i].isValid = false; // 必须标记为无效！
+    }
 }
+
+
+// 这是一个纯查询函数，不改变任何状态
+int32_t SwitchNode::GetPacketDest(Ptr<Packet> p) {
+    FlitHeader fh;
+    p->PeekHeader(fh);
+    
+    // 如果是 HEAD，查路由表
+    if (fh.GetType() == 0 || fh.GetType() == 3) {
+        p->RemoveHeader(fh); // 取出 FlitHeader 以便查路由
+       CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
+        p->PeekHeader(ch);
+        p->AddHeader(fh); // 放回 FlitHeader，保持包不变
+        return GetOutDev(p, ch); // 复用你的路由查找逻辑
+    }
+    
+    // 如果是 BODY，理论上不需要唤醒（因为它已经占锁了），
+    // 但为了代码健壮性，这里应该查不到 ConnectionTable（因为没传 inDev），
+    // 所以这个函数主要服务于 HEAD 包的仲裁。
+    return -1;
+}
+
 
 /**
  * @brief Load Balancing
@@ -153,94 +192,156 @@ uint32_t SwitchNode::DoLbConWeave(Ptr<const Packet> p, const CustomHeader &ch,
 }
 /*----------------------------------*/
 
-void SwitchNode::CheckAndSendPfc(uint32_t inDev, uint32_t qIndex) {
-    Ptr<QbbNetDevice> device = DynamicCast<QbbNetDevice>(m_devices[inDev]);
-    bool pClasses[qCnt] = {0};
-    m_mmu->GetPauseClasses(inDev, qIndex, pClasses);
-    for (int j = 0; j < qCnt; j++) {
-        if (pClasses[j]) {
-            uint32_t paused_time = device->SendPfc(j, 0);
-            m_mmu->SetPause(inDev, j, paused_time);
-            m_mmu->m_pause_remote[inDev][j] = true;
-            /** PAUSE SEND COUNT ++ */
-        }
-    }
-
-    for (int j = 0; j < qCnt; j++) {
-        if (!m_mmu->m_pause_remote[inDev][j]) continue;
-
-        if (m_mmu->GetResumeClasses(inDev, j)) {
-            device->SendPfc(j, 1);
-            m_mmu->SetResume(inDev, j);
-            m_mmu->m_pause_remote[inDev][j] = false;
-        }
-    }
-}
-void SwitchNode::CheckAndSendResume(uint32_t inDev, uint32_t qIndex) {
-    Ptr<QbbNetDevice> device = DynamicCast<QbbNetDevice>(m_devices[inDev]);
-    if (m_mmu->GetResumeClasses(inDev, qIndex)) {
-        device->SendPfc(qIndex, 1);
-        m_mmu->SetResume(inDev, qIndex);
-    }
-}
-
 /********************************************
  *              MAIN LOGICS                 *
  *******************************************/
 
+
+bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
+    //首先就看egress有没有空间，没有直接退出
+    
+    // 1. 解析包类型
+    FlitHeader fh;
+    p->PeekHeader(fh);
+    uint32_t type = fh.GetType();
+    uint32_t outDev = -1;
+    // 【调试日志】
+    if (type == 0 || type == 3) {
+        std::cout << "[DEBUG] Head/Single Pkt at Node " << GetId() 
+                  << " inDev " << inDev << " Type=" << type << std::endl;
+    }
+    // 2. 确定出端口
+    if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {
+        SwitchDestTag destTag;
+        
+        // 【优化核心】：先看有没有缓存
+        if (p->PeekPacketTag(destTag)) {
+            // A. 命中缓存！直接拿结果，无需脱头
+            outDev = destTag.GetDest();
+        } 
+        else {
+            // B. 第一次处理（未命中）：执行昂贵的解析
+            
+            p->RemoveHeader(fh); // 移除 FlitHeader
+            
+            // 这里的 CustomHeader 构造可能需要根据你的实际情况调整参数
+            CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
+            
+            // 注意：PeekHeader 是不够的，GetOutDev 内部可能需要特定的 Header 结构
+            // 如果 GetOutDev 依赖 ch，确保这里正确提取了 ch
+            p->PeekHeader(ch); 
+            
+            p->AddHeader(fh); // 装回去
+            
+            // 查路由表
+            outDev = GetOutDev(p, ch);
+            
+            // 【关键】：把结果存入 Tag，下次就不用算了
+            destTag.SetDest(outDev);
+            p->AddPacketTag(destTag);
+        }
+        
+
+    } else {
+        // 查连接表 (Wormhole 机制)
+        // 假设你之前存了 connectionTable
+        outDev = m_connectionTable[inDev].outDev;
+    }
+    
+    // ---------------------------------------------------------
+    // 检查点 1: 端口占用检查 (Wormhole 锁)
+    // ---------------------------------------------------------
+    int32_t owner = m_portOccupancy[outDev];
+    bool isPortFree = (owner == -1);
+    bool isOwner = (owner == (int32_t)inDev);
+
+    // 如果我是 HEAD，且端口非空闲 -> 阻塞
+    if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {
+        if (!isPortFree) {
+            std::cout << "Switch " << GetId() << ": Port " << outDev << " locked by " << owner << ". InDev " << inDev << " blocked." << std::endl;
+            
+            // 【关键修改】注册到“等待解锁”队列 (Wait for Lock)
+            
+            m_mmu->RegisterWaitPort(outDev, inDev); 
+            return false; 
+        }
+        //std::cout<<"我是head/single,indev是"<<inDev<<"outdev是 "<<outDev
+    }
+    // 如果我是 BODY/TAIL，但我不是 Owner -> 严重错误 (逻辑不一致)
+    else if (!isOwner) {
+        // 这通常不应该发生，除非路由表变了或者状态乱了
+        std::cout << "CRITICAL ERROR: Body packet from " << inDev << " arrived but port " << outDev << " owned by " << owner << std::endl;
+        exit(1); 
+    }
+
+    // ---------------------------------------------------------
+    // 检查点 2: 空间不足检查 (Credit Check)
+    // ---------------------------------------------------------
+    // 注意：即使拿到锁了，如果没有空间，也发不出去！
+    if (!m_mmu->CheckEgressAdmission(outDev)) {
+        std::cout << "Switch " << GetId() << ": Port " << outDev << " buffer full. InDev " << inDev << " blocked." << std::endl;
+        
+        // 【保持原样】注册到“等待空间”队列 (Wait for Space)
+        m_mmu->RegisterWaitSpace(outDev, inDev);
+        return false;
+    }
+    // ---------------------------------------------------------
+    // 通过所有检查 -> 发送
+    // ---------------------------------------------------------
+    
+    // 1. 如果是 HEAD，抢锁
+    if (type == 0 /*HEAD*/ && isPortFree) {
+        m_portOccupancy[outDev] = inDev;
+        m_connectionTable[inDev].outDev = outDev;
+        m_connectionTable[inDev].isValid = true;
+    }
+
+    // 2. 扣除 Credit，更新账本 (保持你的代码)
+    SwitchDestTag destTag;
+    p->RemovePacketTag(destTag);
+    m_mmu->UpdateEgressAdmission(outDev);
+    m_mmu->RemoveFromIngressAdmission(inDev, 3, p->GetSize());
+
+    // 3. 释放上游 Credit (保持你的代码)
+    Ptr<NetDevice> baseDev = m_devices[inDev];
+    Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
+    if (qbbDev) {
+        qbbDev->ReleaseRxCredit(1);
+    }
+     
+    // 4. 物理发送
+    CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
+    m_devices[outDev]->SwitchSend(3, p, ch);
+    std::cout<<"switch   send!"<<std::endl;
+    m_txBytes[outDev] += p->GetSize();
+
+    // 5. 如果是 TAIL，解锁并唤醒等待锁的端口
+    if (type == 2 /*TAIL*/ || type == 3 /*SINGLE*/) {
+        m_portOccupancy[outDev] = -1; // 解锁
+        m_connectionTable[inDev].isValid = false;
+
+        // 【关键修改】唤醒那些因为“端口被锁”而阻塞的入端口
+        m_mmu->NotifyOutputPortFree(outDev); 
+    }
+
+    return true;
+}
+void SwitchNode::releasecredit(uint32_t outDev){
+    //
+   m_mmu->ReleaseEgressAdmission(outDev);
+}
+
 // This function can only be called in switch mode
 bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet,
                                          CustomHeader &ch) {
-    SendToDev(packet, ch);
+    
+    uint32_t inDev = device->GetIfIndex();
+    std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的input函数了"<<std::endl;
+    m_mmu->Input(packet, inDev);
     return true;
 }
 
-void SwitchNode::SendToDev(Ptr<Packet> p, CustomHeader &ch) {
-    /** HIJACK: hijack the packet and run DoSwitchSend internally for Conga and ConWeave.
-     * Note that DoLbConWeave() and DoLbConga() are flow-ECMP function for control packets
-     * or intra-ToR traffic.
-     */
 
-    // Conga
-    if (Settings::lb_mode == 3) {
-        m_mmu->m_congaRouting.RouteInput(p, ch);
-        return;
-    }
-
-    // ConWeave
-    if (Settings::lb_mode == 9) {
-        m_mmu->m_conweaveRouting.RouteInput(p, ch);
-        return;
-    }
-
-    // Others
-    SendToDevContinue(p, ch);
-}
-
-void SwitchNode::SendToDevContinue(Ptr<Packet> p, CustomHeader &ch) {
-    int idx = GetOutDev(p, ch);
-    if (idx >= 0) {
-        NS_ASSERT_MSG(m_devices[idx]->IsLinkUp(),
-                      "The routing table look up should return link that is up");
-
-        // determine the qIndex
-        uint32_t qIndex;
-        if (ch.l3Prot == 0xFF || ch.l3Prot == 0xFE ||
-            (m_ackHighPrio &&
-             (ch.l3Prot == 0xFD ||
-              ch.l3Prot == 0xFC))) {  // QCN or PFC or ACK/NACK, go highest priority
-            qIndex = 0;               // high priority
-        } else {
-            qIndex = (ch.l3Prot == 0x06 ? 1 : ch.udp.pg);  // if TCP, put to queue 1. Otherwise, it
-                                                           // would be 3 (refer to trafficgen)
-        }
-
-        DoSwitchSend(p, ch, idx, qIndex);  // m_devices[idx]->SwitchSend(qIndex, p, ch);
-        return;
-    }
-    std::cout << "WARNING - Drop occurs in SendToDevContinue()" << std::endl;
-    return;  // Drop otherwise
-}
 
 int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
     // look up entries
@@ -278,100 +379,11 @@ int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
     }
 }
 
-/*
- * The (possible) callback point when conweave dequeues packets from buffer
- */
-void SwitchNode::DoSwitchSend(Ptr<Packet> p, CustomHeader &ch, uint32_t outDev, uint32_t qIndex) {
-    // admission control
-    FlowIdTag t;
-    p->PeekPacketTag(t);
-    uint32_t inDev = t.GetFlowId();
 
-    /** NOTE:
-     * ConWeave control packets have the high priority as ACK/NACK/PFC/etc with qIndex = 0.
-     */
-    if (inDev == Settings::CONWEAVE_CTRL_DUMMY_INDEV) { // sanity check
-        // ConWeave reply is on ACK protocol with high priority, so qIndex should be 0
-        assert(qIndex == 0 && m_ackHighPrio == 1 && "ConWeave's reply packet follows ACK, so its qIndex should be 0");
-    }
 
-    if (qIndex != 0) {  // not highest priority
-        if (m_mmu->CheckEgressAdmission(outDev, qIndex,
-                                        p->GetSize())) {  // Egress Admission control
-            if (m_mmu->CheckIngressAdmission(inDev, qIndex,
-                                             p->GetSize())) {  // Ingress Admission control
-                m_mmu->UpdateIngressAdmission(inDev, qIndex, p->GetSize());
-                m_mmu->UpdateEgressAdmission(outDev, qIndex, p->GetSize());
-            } else { /** DROP: At Ingress */
-#if (0)
-                // /** NOTE: logging dropped pkts */
-                // std::cout << "LostPkt ingress - Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
-                //           << "L3Prot:" << ch.l3Prot
-                //           << ",Size:" << p->GetSize()
-                //           << ",At " << Simulator::Now() << std::endl;
-#endif
-                Settings::dropped_pkt_sw_ingress++;
-                return;  // drop
-            }
-        } else { /** DROP: At Egress */
-#if (0)
-            // /** NOTE: logging dropped pkts */
-            // std::cout << "LostPkt egress - Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
-            //           << "L3Prot:" << ch.l3Prot << ",Size:" << p->GetSize() << ",At "
-            //           << Simulator::Now() << std::endl;
-#endif
-            Settings::dropped_pkt_sw_egress++;
-            return;  // drop
-        }
+void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p) {//
+    
 
-        CheckAndSendPfc(inDev, qIndex);
-    }
-
-    m_devices[outDev]->SwitchSend(qIndex, p, ch);
-}
-
-void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p) {
-    FlowIdTag t;
-    p->PeekPacketTag(t);
-    if (qIndex != 0) {
-        uint32_t inDev = t.GetFlowId();
-        if (inDev != Settings::CONWEAVE_CTRL_DUMMY_INDEV) {
-            // NOTE: ConWeave's probe/reply does not need to pass inDev interface,
-            // so skip for conweave's queued packets
-            m_mmu->RemoveFromIngressAdmission(inDev, qIndex, p->GetSize());
-        }
-        m_mmu->RemoveFromEgressAdmission(ifIndex, qIndex, p->GetSize());
-        if (m_ecnEnabled) {
-            bool egressCongested = m_mmu->ShouldSendCN(ifIndex, qIndex);
-            if (egressCongested) {
-                PppHeader ppp;
-                Ipv4Header h;
-                p->RemoveHeader(ppp);
-                p->RemoveHeader(h);
-                h.SetEcn((Ipv4Header::EcnType)0x03);
-                p->AddHeader(h);
-                p->AddHeader(ppp);
-            }
-        }
-        // NOTE: ConWeave's probe/reply does not need to pass inDev interface
-        if (inDev != Settings::CONWEAVE_CTRL_DUMMY_INDEV) {
-            CheckAndSendResume(inDev, qIndex);
-        }
-    }
-
-    // HPCC's INT
-    if (1) {
-        uint8_t *buf = p->GetBuffer();
-        if (buf[PppHeader::GetStaticSize() + 9] == 0x11) {  // udp packet
-            IntHeader *ih = (IntHeader *)&buf[PppHeader::GetStaticSize() + 20 + 8 +
-                                              6];  // ppp, ip, udp, SeqTs, INT
-            Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(m_devices[ifIndex]);
-            if (m_ccMode == 3) {  // HPCC
-                ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex],
-                            dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate());
-            }
-        }
-    }
     m_txBytes[ifIndex] += p->GetSize();
 }
 

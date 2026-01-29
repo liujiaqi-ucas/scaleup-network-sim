@@ -34,6 +34,8 @@ class TraceContainer;
  */
 class DropTailQueue : public Queue {
 public:
+// 【新增】获取队列包数量
+  uint32_t GetNPackets (void) const;
   static TypeId GetTypeId (void);
   /**
    * \brief DropTailQueue Constructor
@@ -58,8 +60,7 @@ public:
    * \returns The encapsulation mode of this device.
    */
   DropTailQueue::QueueMode GetMode (void);
-
-private:
+  int getsize();
   virtual bool DoEnqueue (Ptr<Packet> p);
   virtual Ptr<Packet> DoDequeue (void);
   virtual Ptr<const Packet> DoPeek (void) const;

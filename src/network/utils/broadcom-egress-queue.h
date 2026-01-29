@@ -43,12 +43,13 @@ namespace ns3 {
 		uint32_t GetNBytes(uint32_t qIndex) const;
 		uint32_t GetNBytesTotal() const;
 		uint32_t GetLastQueue();
-
+       // 【新增】获取指定索引的子队列指针
+    Ptr<Queue> GetQueue(uint32_t qIndex) const;
 		TracedCallback<Ptr<const Packet>, uint32_t> m_traceBeqEnqueue;
 		TracedCallback<Ptr<const Packet>, uint32_t> m_traceBeqDequeue;
 		
 		std::unordered_map<int32_t, Time> current_pause_time;
-
+        std::vector<Ptr<Queue> > m_queues;
 	private:
 		bool DoEnqueue(Ptr<Packet> p, uint32_t qIndex);
 		Ptr<Packet> DoDequeueRR(bool paused[]);
@@ -61,7 +62,7 @@ namespace ns3 {
 		uint32_t m_bytesInQueueTotal;
 		uint32_t m_rrlast;
 		uint32_t m_qlast;
-		std::vector<Ptr<Queue> > m_queues; // uc queues
+		//std::vector<Ptr<Queue> > m_queues; // uc queues
 	};
 
 } // namespace ns3

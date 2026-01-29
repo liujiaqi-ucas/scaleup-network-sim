@@ -26,12 +26,12 @@ class RdmaHw : public Object {
    public:
     static TypeId GetTypeId(void);
     RdmaHw();
-
+    Ptr<RdmaRxQueuePair> m_currentRxQp; // 用于缓存当前正在接收的 QP
     Ptr<Node> m_node;
     DataRate m_minRate;  //< Min sending rate
     uint32_t m_mtu;
     uint32_t m_cc_mode;
-    double m_nack_interval;
+    //double m_nack_interval;
     uint32_t m_chunk;
     uint32_t m_ack_interval;
     bool m_backto0;
@@ -78,19 +78,18 @@ class RdmaHw : public Object {
     void DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t pg);  // delete RxQP
 
     int ReceiveUdp(Ptr<Packet> p, CustomHeader &ch);
-    int ReceiveCnp(Ptr<Packet> p, CustomHeader &ch);
-    int ReceiveAck(Ptr<Packet> p, CustomHeader &ch);  // handle both ACK and NACK
+    
     int Receive(Ptr<Packet> p,
                 CustomHeader &
                     ch);  // callback function that the QbbNetDevice should use when receive
                           // packets. Only NIC can call this function. And do not call this upon PFC
 
-    void CheckandSendQCN(Ptr<RdmaRxQueuePair> q);
-    int ReceiverCheckSeq(uint32_t seq, Ptr<RdmaRxQueuePair> q, uint32_t size, bool &cnp);
+    
+    
     void AddHeader(Ptr<Packet> p, uint16_t protocolNumber);
     static uint16_t EtherToPpp(uint16_t protocol);
 
-    void RecoverQueue(Ptr<RdmaQueuePair> qp);
+    
     void QpComplete(Ptr<RdmaQueuePair> qp);
     void SetLinkDown(Ptr<QbbNetDevice> dev);
 
@@ -106,86 +105,10 @@ class RdmaHw : public Object {
 
     void HandleTimeout(Ptr<RdmaQueuePair> qp, Time rto);
 
-    /* statistics */
-    uint32_t cnp_by_ecn;
-    uint32_t cnp_by_ooo;
-    uint32_t cnp_total;
-    size_t getIrnBufferOverhead();  // get buffer overhead for IRN
+    
 
-    /******************************
-     * Mellanox's version of DCQCN
-     *****************************/
-    double m_g;               // feedback weight
-    double m_rateOnFirstCNP;  // the fraction of line rate to set on first CNP
-    bool m_EcnClampTgtRate;
-    double m_rpgTimeReset;
-    double m_rateDecreaseInterval;
-    uint32_t m_rpgThreshold;
-    double m_alpha_resume_interval;
-    DataRate m_rai;   //< Rate of additive increase
-    DataRate m_rhai;  //< Rate of hyper-additive increase
-
-    // the Mellanox's version of alpha update:
-    // every fixed time slot, update alpha.
-    void UpdateAlphaMlx(Ptr<RdmaQueuePair> q);
-    void ScheduleUpdateAlphaMlx(Ptr<RdmaQueuePair> q);
-
-    // Mellanox's version of CNP receive
-    void cnp_received_mlx(Ptr<RdmaQueuePair> q);
-
-    // Mellanox's version of rate decrease
-    // It checks every m_rateDecreaseInterval if CNP arrived (m_decrease_cnp_arrived).
-    // If so, decrease rate, and reset all rate increase related things
-    void CheckRateDecreaseMlx(Ptr<RdmaQueuePair> q);
-    void ScheduleDecreaseRateMlx(Ptr<RdmaQueuePair> q, uint32_t delta);
-
-    // Mellanox's version of rate increase
-    void RateIncEventTimerMlx(Ptr<RdmaQueuePair> q);
-    void RateIncEventMlx(Ptr<RdmaQueuePair> q);
-    void FastRecoveryMlx(Ptr<RdmaQueuePair> q);
-    void ActiveIncreaseMlx(Ptr<RdmaQueuePair> q);
-    void HyperIncreaseMlx(Ptr<RdmaQueuePair> q);
-
-    // Implement Timeout according to IB Spec Vol. 1 C9-139.
-    // For an HCA requester using Reliable Connection service, to detect missing responses,
-    // every Send queue is required to implement a Transport Timer to time outstanding requests.
-    Time m_waitAckTimeout;
-
-    /***********************
-     * High Precision CC
-     ***********************/
-    double m_targetUtil;
-    double m_utilHigh;
-    uint32_t m_miThresh;
-    bool m_multipleRate;
-    bool m_sampleFeedback;  // only react to feedback every RTT, or qlen > 0
-    void HandleAckHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch);
-    void UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch, bool fast_react);
-    void UpdateRateHpTest(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch, bool fast_react);
-    void FastReactHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch);
-
-    /**********************
-     * TIMELY
-     *********************/
-    double m_tmly_alpha, m_tmly_beta;
-    uint64_t m_tmly_TLow, m_tmly_THigh, m_tmly_minRtt;
-    void HandleAckTimely(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch);
-    void UpdateRateTimely(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch, bool us);
-    void FastReactTimely(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch);
-
-    /**********************
-     * DCTCP
-     *********************/
-    DataRate m_dctcp_rai;
-    void HandleAckDctcp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch);
-
-    /**********************
-     * IRN
-     *********************/
-    bool m_irn;
-    Time m_irn_rtoLow;
-    Time m_irn_rtoHigh;
-    uint32_t m_irn_bdp;
+    
+    
 };
 
 } /* namespace ns3 */

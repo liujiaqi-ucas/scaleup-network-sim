@@ -16,77 +16,81 @@
 namespace ns3 {
 
 class Packet;
-
+class SwitchNode; // 【修改1】前向声明 SwitchNode，不要 include switch-node.h
 class SwitchMmu : public Object {
    public:
     static const unsigned qCnt = 8;    // Number of queues/priorities used
     static const unsigned pCnt = 128;  // port 0 is not used so + 1	// Number of ports used
-    static const unsigned MTU = 1048;  // 1000 + headers
-
+    //static const unsigned MTU = 1048;  // 1000 + headers
+    static const unsigned m_staticQueueLimitBytes=128*1024;
+    // 【修改2】添加设置 SwitchNode 指针的接口
+    uint32_t m_usedIngressPGBytes[pCnt][qCnt];
+    void SetNode(SwitchNode* node);
     static TypeId GetTypeId(void);
-
+    
     SwitchMmu(void);
     void InitSwitch(void);
-
+    void ConfigNPort(uint32_t n_port);
     bool CheckIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
-    bool CheckEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
+    //bool CheckEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
     void UpdateIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
-    void UpdateEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
+    //void UpdateEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
     void RemoveFromIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
-    void RemoveFromEgressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize);
+    // 【新增】Egress 空间管理接口
+    // 检查是否有足够空间
+    bool CheckEgressAdmission(uint32_t port);
+    // 占用空间 (Packet 进入 Egress Queue)
+    void UpdateEgressAdmission(uint32_t port);
+    // 释放空间 (Packet 离开 Egress Queue)
+    //void ReleaseEgressAdmission(uint32_t port);
+    // 在 SwitchMmu 类 private 区域添加：
+    // 记录每个入端口是否处于阻塞状态（队头包尝试发送失败，正在等待资源）
+     bool m_ingressBlocked[pCnt];
+    
+    
 
-    void SetPause(uint32_t port, uint32_t qIndex, uint32_t pause_time);
-    void SetResume(uint32_t port, uint32_t qIndex);
-    void GetPauseClasses(uint32_t port, uint32_t qIndex, bool pClasses[]);
-    bool GetResumeClasses(uint32_t port, uint32_t qIndex);
-
-    void SetBroadcomParams(uint32_t buffer_cell_limit_sp,  // ingress sp buffer threshold p.120
-                           uint32_t buffer_cell_limit_sp_shared,  // ingress sp buffer shared
-                                                                  // threshold, nonshare -> share
-                           uint32_t pg_min_cell,                  // ingress pg guarantee
-                           uint32_t port_min_cell,                // ingress port guarantee
-                           uint32_t pg_shared_limit_cell,         // max buffer for an ingress pg
-                           uint32_t port_max_shared_cell,         // max buffer for an ingress port
-                           uint32_t pg_hdrm_limit,                // ingress pg headroom
-                           uint32_t port_max_pkt_size,            // ingress global headroom
-                           uint32_t q_min_cell,                   // egress queue guaranteed buffer
-                           uint32_t op_uc_port_config1_cell,      // egress queue threshold
-                           uint32_t op_uc_port_config_cell,       // egress port threshold
-                           uint32_t op_buffer_shared_limit_cell,  // egress sp threshold
-                           uint32_t q_shared_alpha_cell, uint32_t port_share_alpha_cell,
-                           uint32_t pg_qcn_threshold);
-
-    void SetMarkingThreshold(uint32_t kmin, uint32_t kmax, double pmax);
-
-    bool ShouldSendCN(uint32_t ifindex, uint32_t qIndex);
-
-    uint32_t GetUsedBufferTotal();
-
-    void SetDynamicThreshold(bool value);
-    bool GetDynamicThreshold(void) const { return m_dynamicth; }
-
-    // void printQueueStat(std::ostream& os, uint32_t port);
-
-    void ConfigEcn(uint32_t port, uint32_t _kmin, uint32_t _kmax, double _pmax);
     void ConfigBufferSize(uint32_t size);
 
-    void ConfigHdrm(uint32_t port, uint32_t size);
-    void ConfigNPort(uint32_t n_port);
-
-    uint32_t GetIngressSP(uint32_t port, uint32_t pgIndex);
-    uint32_t GetEgressSP(uint32_t port, uint32_t qIndex);
-
+    
+    
     // config
     uint32_t node_id;
 
-    uint32_t kmin[pCnt], kmax[pCnt];
-    double pmax[pCnt];
-    uint32_t paused[pCnt][qCnt];
-    EventId resumeEvt[pCnt][qCnt];
-    bool m_pause_remote[pCnt][qCnt];
+    // 【新增】核心逻辑：Flit 离开通知
+    // 返回值：如果整包发完了，返回需要释放的 Credit 数量；否则返回 0。
+    uint32_t CheckCreditRelease(uint32_t ingressPort, uint32_t qIndex, bool isTail);
 
-    uint32_t pfc_a_shift[pCnt];         // legacy: not used anymore
-    uint32_t egress_bytes[pCnt][qCnt];  // legacy: not used anymore
+    
+    //出端口信用器,代表每个出端口还有多少credit
+    uint32_t m_egressCredits[pCnt];
+
+    // 【核心入口】Device 收到包后调用它
+    void Input(Ptr<Packet> p, uint32_t inDev); 
+
+    // 【核心调度】尝试把 inDev 队头的包发出去
+    void ArbitrateAndSend(uint32_t inDev);
+
+    // 【唤醒机制】当出端口 outDev 空闲时调用
+    void NotifyOutputPortFree(uint32_t outDev);
+
+    // 名单 A: 等待空间的人 (Space Waiters)
+    // 含义：InDev 因为 OutDev 满了而被卡住
+    std::set<uint32_t> m_waitingForSpace[pCnt]; 
+
+    // 名单 B: 等待锁的人 (Lock Waiters)
+    // 含义：InDev 因为 OutDev 被别人占用而被卡住
+    std::set<uint32_t> m_waitingForLock[pCnt];
+
+
+
+
+
+
+    // 【修改3】添加 RegisterWaitSpace 声明
+     void RegisterWaitSpace(uint32_t outDev, uint32_t inDev);
+     void RegisterWaitPort(uint32_t outDev, uint32_t inDev);
+     void ReleaseEgressAdmission(uint32_t outDev);
+     void WakeupIngress(uint32_t inDev);
 
     uint32_t GetActivePortCnt(void) const { return m_activePortCnt; }
     void SetActivePortCnt(uint32_t v) {
@@ -94,19 +98,7 @@ class SwitchMmu : public Object {
         InitSwitch();
     }
 
-    uint32_t GetMmuBufferBytes(void) const { return m_maxBufferBytes; }
-    uint32_t GetMaxBufferBytesPerPort(void) const { return m_maxBufferBytesPerPort; }
-    void SetMaxBufferBytesPerPort(uint32_t v) {
-        m_maxBufferBytesPerPort = v;
-        InitSwitch();
-    }
-
-    uint32_t GetPgHdrmLimit(void) const { return m_pg_hdrm_limit[0]; }
-    void SetPgHdrmLimit(uint32_t v) {
-        for (int i = 0; i < pCnt; i++) m_pg_hdrm_limit[i] = v;
-        InitSwitch();
-    }
-
+    
     /*------------ Conga Objects-------------*/
     CongaRouting m_congaRouting;
 
@@ -115,61 +107,27 @@ class SwitchMmu : public Object {
 
     /*------------ ConWeave Objects-------------*/
     ConWeaveRouting m_conweaveRouting;
-
+  std::deque<Ptr<Packet>> m_ingressQueues[pCnt];
    private:
-    bool m_PFCenabled;
+    // 【修改4】添加 SwitchNode 指针
+    SwitchNode* m_node;
+   // 【物理入端口队列】
+    // 只有一个 VC，所以是一维数组：每个入端口一个队列
+    //std::deque<Ptr<Packet>> m_ingressQueues[pCnt];
+    
+    // 轮询指针 (用于唤醒时的公平调度)
+    uint32_t m_rrPtr[pCnt]; // 每个出端口记录上次服务了谁
 
-    uint32_t m_maxBufferBytes{0};
-    uint32_t m_usedTotalBytes{0};
+    // 【新增】Egress 端口占用记账
+    uint32_t m_egressUsedBytes[pCnt];
+    // Egress 端口的静态阈值 (比如 100KB)
+    uint32_t m_egressLimitBytes;
+    
+    
 
     unsigned m_activePortCnt{0};
-    uint32_t m_maxBufferBytesPerPort{0};  // use this to calculate m_maxBufferBytes
-    uint32_t m_staticMaxBufferBytes{0};   // use this to calculate m_maxBufferBytes
+    
 
-    uint32_t m_usedIngressPGBytes[pCnt][qCnt];
-    uint32_t m_usedIngressPortBytes[pCnt];
-    uint32_t m_usedIngressSPBytes[4];
-    uint32_t m_usedIngressPGHeadroomBytes[pCnt][qCnt];
-
-    uint32_t m_usedEgressQMinBytes[pCnt][qCnt];
-    uint32_t m_usedEgressQSharedBytes[pCnt][qCnt];
-    uint32_t m_usedEgressPortBytes[pCnt];
-    uint32_t m_usedEgressSPBytes[4];
-
-    // ingress params
-    uint32_t m_buffer_cell_limit_sp;  // ingress sp buffer threshold p.120
-    uint32_t
-        m_buffer_cell_limit_sp_shared;  // ingress sp buffer shared threshold, nonshare -> share
-    uint32_t m_pg_min_cell;             // ingress pg guarantee
-    uint32_t m_port_min_cell;           // ingress port guarantee
-    uint32_t m_pg_shared_limit_cell;    // max buffer for an ingress pg
-    uint32_t m_port_max_shared_cell;    // max buffer for an ingress port
-    uint32_t m_pg_hdrm_limit[pCnt];     // ingress pg headroom
-    uint32_t m_port_max_pkt_size;       // ingress global headroom
-    // still needs reset limits..
-    uint32_t m_port_min_cell_off;  // PAUSE off threshold
-    uint32_t m_pg_shared_limit_cell_off;
-    uint32_t m_global_hdrm_limit;
-
-    // egress params
-    uint32_t m_q_min_cell;                   // egress queue guaranteed buffer
-    uint32_t m_op_uc_port_config1_cell;      // egress queue threshold
-    uint32_t m_op_uc_port_config_cell;       // egress port threshold
-    uint32_t m_op_buffer_shared_limit_cell;  // egress sp threshold
-
-    // dynamic threshold
-    double m_pg_shared_alpha_cell{0};
-    double m_pg_shared_alpha_cell_egress{0};
-    double m_pg_shared_alpha_cell_off_diff;
-    double m_port_shared_alpha_cell;
-    double m_port_shared_alpha_cell_off_diff;
-    bool m_dynamicth;
-
-    double m_log_start;
-    double m_log_end;
-    double m_log_step;
-
-    UniformRandomVariable m_uniform_random_var;
 };
 
 } /* namespace ns3 */

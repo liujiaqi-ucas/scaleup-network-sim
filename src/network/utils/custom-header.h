@@ -61,7 +61,7 @@ public:
   virtual void Serialize (Buffer::Iterator start) const;
   virtual uint32_t Deserialize (Buffer::Iterator start);
 
-  uint32_t brief, headerType, getInt;
+  uint32_t brief, headerType;
   enum HeaderType{
 	L2_Header = 1,
 	L3_Header = 2,
@@ -107,7 +107,7 @@ public:
 		  // SeqTsHeader
 		  uint16_t pg;
 		  uint32_t seq;
-		  IntHeader ih;
+		  //IntHeader ih;
 	  } udp;
 	  // CnHeader
 	  struct {

@@ -31,7 +31,7 @@ NS_OBJECT_ENSURE_REGISTERED (CustomHeader);
 
 CustomHeader::CustomHeader ()
   : brief(1), headerType(L3_Header | L4_Header), 
-	getInt(1),
+	//getInt(1),
 	// ppp header
 	pppProto (0),
 	// IPv4 header
@@ -48,7 +48,7 @@ CustomHeader::CustomHeader ()
 }
 CustomHeader::CustomHeader (uint32_t _headerType)
   : brief(1), headerType(_headerType), 
-	getInt(1),
+	//getInt(1),
 	// ppp header
 	pppProto (0),
 	// IPv4 header
@@ -161,7 +161,7 @@ void CustomHeader::Serialize (Buffer::Iterator start) const{
 		  // SeqTsHeader
 		  i.WriteHtonU32 (udp.seq);
 		  i.WriteHtonU16 (udp.pg);
-		  udp.ih.Serialize(i);
+		  //udp.ih.Serialize(i);
 	  }else if (l3Prot == 0xFF){ // CNP
 		  i.WriteU8(cnp.qIndex);
 		  i.WriteU16(cnp.fid);
@@ -176,7 +176,7 @@ void CustomHeader::Serialize (Buffer::Iterator start) const{
 		  i.WriteU32(ack.seq);
 		  i.WriteU32(ack.irnNack);
 		  i.WriteU16(ack.irnNackSize);
-		  udp.ih.Serialize(i);
+		  //udp.ih.Serialize(i);
 	  }else if (l3Prot == 0xFE){ // PFC
 		  i.WriteU32 (pfc.time);
 		  i.WriteU32 (pfc.qlen);
@@ -187,7 +187,7 @@ void CustomHeader::Serialize (Buffer::Iterator start) const{
 
 uint32_t
 CustomHeader::Deserialize (Buffer::Iterator start)
-{
+{//这个函数非常重要
   Buffer::Iterator i = start;
 
   // L2
@@ -295,8 +295,8 @@ CustomHeader::Deserialize (Buffer::Iterator start)
 		  // SeqTsHeader
 		  udp.seq = i.ReadNtohU32 ();
 		  udp.pg =  i.ReadNtohU16 ();
-		  if (getInt)
-			  udp.ih.Deserialize(i);
+		//   if (getInt)
+		// 	  udp.ih.Deserialize(i);
 
 		  l4Size = GetUdpHeaderSize();
 	  }else if (l3Prot == 0xFF){
@@ -314,8 +314,8 @@ CustomHeader::Deserialize (Buffer::Iterator start)
 		  ack.seq = i.ReadU32();
 		  ack.irnNack = i.ReadU32();
 		  ack.irnNackSize = i.ReadU16();
-		  if (getInt)
-			  ack.ih.Deserialize(i);
+		//   if (getInt)
+		// 	  ack.ih.Deserialize(i);
 		  l4Size = GetAckSerializedSize();
 	  }else if (l3Prot == 0xFE){ // PFC
 		  pfc.time = i.ReadU32 ();
@@ -333,11 +333,13 @@ uint8_t CustomHeader::GetIpv4EcnBits (void) const{
 }
 
 uint32_t CustomHeader::GetAckSerializedSize(void){
-	return sizeof(ack.sport) + sizeof(ack.dport) + sizeof(ack.flags) + sizeof(ack.pg) + sizeof(ack.seq) + IntHeader::GetStaticSize();
+	return sizeof(ack.sport) + sizeof(ack.dport) + sizeof(ack.flags) + sizeof(ack.pg) + sizeof(ack.seq) ;
+	//+ IntHeader::GetStaticSize();
 }
 
 uint32_t CustomHeader::GetUdpHeaderSize(void){
-	return 8 + sizeof(udp.pg) + sizeof(udp.seq) + IntHeader::GetStaticSize();
+	return 8 + sizeof(udp.pg) + sizeof(udp.seq) ;
+	//+ IntHeader::GetStaticSize();
 }
 
 uint32_t CustomHeader::GetStaticWholeHeaderSize(void){
