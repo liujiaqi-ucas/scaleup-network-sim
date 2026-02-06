@@ -28,13 +28,7 @@ struct ReplayItem {
         : seq_num(s), packet(p), time_sent(t), retry_count(0) {}
 };
 
-/**
- * \brief 专为 Scale-up 网络设计的 GBN 重传缓冲区
- * * 特性：
- * 1. 基于 std::deque 实现 O(1) 的头部 ACK 和尾部 Push。
- * 2. 支持通过序号计算偏移量，实现 O(1) 的 NACK 定位。
- * 3. 内置 16-bit 序号回绕处理逻辑。
- */
+
 class ReplayBuffer 
 {
 public:

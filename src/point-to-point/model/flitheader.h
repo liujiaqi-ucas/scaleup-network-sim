@@ -100,7 +100,7 @@ private:
       
       
       uint32_t pkt_len    : 8;  // 包长度 (单位: Flit), 最大 255 Flits (64KB if 256B/Flit)
-      uint32_t reserve  : 6;  // flit对应的包的原始的payload字节数，会在接收端用到,累加的时候用
+      uint32_t reserve  : 6;  // 
   
       
       uint32_t ack_seq    : 16;//ack的数值

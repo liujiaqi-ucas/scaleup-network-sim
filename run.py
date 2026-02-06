@@ -220,27 +220,47 @@ def main():
     flow = "L_{load:.2f}_CDF_{cdf}_N_{n_host}_T_{time}ms_B_{bw}_flow".format(
         load=hostload, cdf=args.cdf, n_host=n_host, time=int(float(args.simul_time)*1000), bw=bw)
 
-    # check the file exists
-    if (exists(os.getcwd() + "/config/" + flow + ".txt")):
-        print("Input traffic file with load:{load:.2f}, cdf:{cdf}, n_host:{n_host} already exists".format(
-            load=hostload, cdf=cdf, n_host=n_host))
-    else:  # make the input traffic file
-        print("Generate a input traffic file...")
-        print("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
-            cdf=os.getcwd() + "/../traffic_gen/" + args.cdf + ".txt",
-            n_host=n_host,
-            load=hostload / 100.0,
-            bw=args.bw + "G",
-            time=args.simul_time,
-            output=os.getcwd() + "/config/" + flow + ".txt"))
+    # # check the file exists更改
+    # if (exists(os.getcwd() + "/config/" + flow + ".txt")):
+    #     print("Input traffic file with load:{load:.2f}, cdf:{cdf}, n_host:{n_host} already exists".format(
+    #         load=hostload, cdf=cdf, n_host=n_host))
+    # else:  # make the input traffic file
+    #     print("Generate a input traffic file...")
+    #     print("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
+    #         cdf=os.getcwd() + "/../traffic_gen/" + args.cdf + ".txt",
+    #         n_host=n_host,
+    #         load=hostload / 100.0,
+    #         bw=args.bw + "G",
+    #         time=args.simul_time,
+    #         output=os.getcwd() + "/config/" + flow + ".txt"))
 
-        os.system("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
-            cdf=os.getcwd() + "/traffic_gen/" + args.cdf + ".txt",
-            n_host=n_host,
-            load=hostload / 100.0,
-            bw=args.bw + "G",
-            time=args.simul_time,
-            output=os.getcwd() + "/config/" + flow + ".txt"))
+    #     os.system("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
+    #         cdf=os.getcwd() + "/traffic_gen/" + args.cdf + ".txt",
+    #         n_host=n_host,
+    #         load=hostload / 100.0,
+    #         bw=args.bw + "G",
+    #         time=args.simul_time,
+    #         output=os.getcwd() + "/config/" + flow + ".txt"))
+    
+    
+
+    
+    # 强制指定为我们刚刚生成的 Scale-up 流量文件
+    # 假设你之前生成的 flow_allreduce.txt 放在 config/ 目录下
+    target_flow_file = "flow_allreduce.txt"  # 或者 flow_alltoall.txt
+    
+    # 将脚本里的 flow 变量强行覆盖，确保 config 模板里填的是对的名字
+    flow = target_flow_file.replace(".txt", "") 
+
+    # 验证文件是否存在，不存在就报错，不再自动生成
+    if not exists(os.getcwd() + "/config/" + target_flow_file):
+        raise Exception(f"Error: {target_flow_file} not found in config/ directory! Please run gen_scaleup_traffic.py first.")
+    
+    print(f"Using Scale-up Traffic File: {target_flow_file}")
+
+
+
+
 
     # sanity check - bandwidth
     with open("config/{topo}.txt".format(topo=args.topo), 'r') as f_topo:

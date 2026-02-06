@@ -198,7 +198,7 @@ uint32_t SwitchNode::DoLbConWeave(Ptr<const Packet> p, const CustomHeader &ch,
 
 
 bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
-    //首先就看egress有没有空间，没有直接退出
+    
     
     // 1. 解析包类型
     FlitHeader fh;
@@ -300,13 +300,14 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     SwitchDestTag destTag;
     p->RemovePacketTag(destTag);
     m_mmu->UpdateEgressAdmission(outDev);
-    m_mmu->RemoveFromIngressAdmission(inDev, 3, p->GetSize());
+
+    //m_mmu->RemoveFromIngressAdmission(inDev, 3, p->GetSize());//这个好像也不用改，就是一个记账的工作嘛
 
     // 3. 释放上游 Credit (保持你的代码)
     Ptr<NetDevice> baseDev = m_devices[inDev];
     Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
     if (qbbDev) {
-        qbbDev->ReleaseRxCredit(1);
+        qbbDev->ReleaseRxCredit(1);//release这个函数估计也要改一下
     }
      
     // 4. 物理发送
@@ -337,12 +338,16 @@ bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> pack
     
     uint32_t inDev = device->GetIfIndex();
     std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的input函数了"<<std::endl;
-    m_mmu->Input(packet, inDev);
+    m_mmu->ArbitrateAndSend(inDev);//这里直接调用转发函数就行了，尝试一下进行转发
     return true;
 }
 
 
-
+void SwitchNode::cantransmit(int inDev){
+    Ptr<NetDevice> baseDev = m_devices[inDev];
+    Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
+    return qbbDev->cantransmit();
+}
 int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
     // look up entries
     auto entry = m_rtTable.find(ch.dip);

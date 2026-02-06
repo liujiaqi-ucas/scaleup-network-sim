@@ -62,7 +62,7 @@ void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
     // 记录：inDev 正在等待 outDev 的空间
     m_waitingForLock[outDev].insert(inDev);
 }
-void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {
+void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {//这个函数就完全不用了
     uint32_t psize = p->GetSize();
 
     // 1. 【准入检查】(流控底线)
@@ -96,23 +96,34 @@ void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {
 
 
 void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
-    // 循环处理，直到队列空或被阻塞
-    while (!m_ingressQueues[inDev].empty()) {
+    //这里应该加一个判断判断当前满不满足重排序缓冲区的转发条件，在这里直接就卡住就行，后面应该都不用变，后面把ingress这个队列，换成device里面的那个ingress队列就行
+     if(!m_node->cantransmit(inDev)){
+         std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 重排序缓冲区不满足转发条件，先别转发了"<<std::endl;
+         return;
+     }
+    
+    Ptr<NetDevice> baseDev = m_devices[inDev];
+    Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
+    //循环处理队列中的包
+    while (qbbDev->m_forwardNext != qbbDev->m_rxNext) {//在rx里面循环遍历，直到结束
         
         // 1. 取队头
-        Ptr<Packet> p = m_ingressQueues[inDev].front();
+        Ptr<Packet> p = qbbDev->m_rxBuffer->GetPacket(qbbDev->m_forwardNext);
         FlitHeader fh;
         p->PeekHeader(fh);
         uint32_t type = fh.GetType();
 
         // 2. 尝试发送
-        bool sent = m_node->AttemptForward(p, inDev);
+        bool sent = m_node->AttemptForward(p, inDev);//这个函数得好好改一下
 
         if (sent) {
             // ----------------------------------------------------
             // A. 发送成功
             // ----------------------------------------------------
-            m_ingressQueues[inDev].pop_front();
+            //物理出队
+            qbbDev->m_rxBuffer->ClearEntry(m_forwardNext);//清理槽位
+            qbbDev->m_forwardNext=(qbbDev->m_forwardNext+1)%MAX_SN;//更新转发指针
+            //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false
             m_ingressBlocked[inDev] = false; 
 

@@ -107,7 +107,7 @@ class SwitchMmu : public Object {
 
     /*------------ ConWeave Objects-------------*/
     ConWeaveRouting m_conweaveRouting;
-  std::deque<Ptr<Packet>> m_ingressQueues[pCnt];
+  //std::deque<Ptr<Packet>> m_ingressQueues[pCnt];
    private:
     // 【修改4】添加 SwitchNode 指针
     SwitchNode* m_node;

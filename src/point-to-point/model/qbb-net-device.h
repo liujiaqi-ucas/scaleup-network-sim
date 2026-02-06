@@ -35,8 +35,13 @@
 #include <unordered_map>
 #include <ns3/rdma.h>
 #include "flitheader.h"
-#include "replay-buffer.h"
-
+#include"sr-header.h"
+#include"rx-buffer.h"
+//#include "replay-buffer.h"
+#include "sr-replaybuffer.h"
+#define MAX_SN 65536//序号空间
+#define m_bufferSize 512//重传缓冲区的空间
+#define m_rttEstimate //这个是冷却时间
 namespace ns3 {
 inline int SeqDist(uint16_t seq1, uint16_t seq2) {
     // 利用 int16_t 的溢出特性计算循环序列号距离
@@ -99,10 +104,10 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
  uint16_t m_next_seq_num;//下一个要分配的flit的序号
  uint16_t m_last_acked_seq;//最后一个被接收端ack的flit序号，也就是发送窗口左边界的上一个序号
  //Ptr<Packet> sendptr;//指向下一个待发送flit的指针
- uint16_t m_replay_trigger_seq;//触发这一轮重传的序号，用于过滤重复的nak
- ReplayBuffer m_replayBuffer; //重传缓冲区，存放发送完的flit
+ //uint16_t m_replay_trigger_seq;//触发这一轮重传的序号，用于过滤重复的nak
+ //ReplayBuffer m_replayBuffer; //重传缓冲区，存放发送完的flit
  // 我们的重传队列
-  std::deque<Ptr<Packet>> m_retransQueue;
+  std::deque<uint16_t> m_retransQueue;
   //****************************************************************************** */
   //接收端需要维护的变量
   uint16_t expected_seq;//接收端期待收到的下一个flit的序号
@@ -169,11 +174,35 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     uint16_t m_lastReceivedCreditLimit;
    void ReleaseRxCredit (uint16_t flitsFreed);//device用来更新信用变量的函数
     
-   // --- 包重组状态机 (Reassembly State Machine) ---
-    // uint16_t m_currentPacketExpectedFlits; // 当前包头部声明的总Flit数
-    // uint16_t m_currentPacketReceivedFlits; // 当前包实际收到的Flit数
-    // uint32_t m_currentPacketBytes;         // 当前包累计的字节数 (用来算Credit)
-    // bool     m_isReassembling;             // 是否正在处于重组状态
+   //************************************************************************************ */
+   //sr要维护的变量，发送端
+   uint32_t m_txuna;//窗口左边缘，最早发出去但是还没收到确认的SX
+   uint32_t next;//下一个要分配个新数据的flitnumber
+   uint32_t m_windowsize;//发送窗口大小
+   Ptr<ReplayBuffer> m_replayBuffer;//重传缓冲区
+   //接收端
+   
+   RxBuffer *m_rxBuffer;//这个是重排序缓冲区
+   // 这就是你的"本地位图"，它长久存在
+    std::vector<bool> m_isReceived;
+    uint16_t m_rxNext;       // 【ACK 指针】：连续收到的最高序号 + 1
+    uint16_t m_forwardNext;  // 【转发指针】：等待进入交换机的队头
+    
+    
+    bool cantransmit();//判断当前的重排序缓冲区能否转发包
+   // 辅助函数：检查是否过了冷却期
+    bool CheckNackCooldown();
+
+    // 状态变量
+    Time m_lastNackTime;   // 上次发送 NACK 的时刻
+    Time m_nackCooldown;   // 冷却时间间隔 (通常设置为 1个 RTT)
+
+    bool nakflag;//表示当前有nak要发送
+    uint16_t nakseq;//表示当前要发送的nak序号
+    uint32_t nakbitmap;//表示当前要发送的nak位图
+
+    
+   //*********************************************************************************** */
   static TypeId GetTypeId (void);
 
   QbbNetDevice ();

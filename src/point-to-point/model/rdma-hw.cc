@@ -308,17 +308,17 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
     }
     //对于body和tail包，完全不用管，我只要头包对上了，就基本可以认为是正确的了
         // 在函数的最后，return 0 之前：
-
-        if (rxQp) {
-        uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
-        // 加上越界检查更安全
-        if (nic_idx < m_nic.size()) {
-            Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
-            if (dev) {
-                dev->ReleaseRxCredit(1);
-            }
-        }
-    }
+    //流控释放改成到device里面了
+    //     if (rxQp) {
+    //     uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
+    //     // 加上越界检查更安全
+    //     if (nic_idx < m_nic.size()) {
+    //         Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
+    //         if (dev) {
+    //             dev->ReleaseRxCredit(1);
+    //         }
+    //     }
+    // }
     return 0;
     
 }

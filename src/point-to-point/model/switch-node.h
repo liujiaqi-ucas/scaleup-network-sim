@@ -122,6 +122,7 @@ class SwitchNode : public Node {
 
     // 辅助函数：只查路由，不发送 (用于 MMU 唤醒时偷看目的地)
     int32_t GetPacketDest(Ptr<Packet> p);
+    void cantransmit(int inDev);//判断指定端口的包目前能否转发，丢包条件下的
 };
 
 } /* namespace ns3 */
