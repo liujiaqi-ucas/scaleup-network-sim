@@ -36,7 +36,7 @@
 #include <ns3/rdma.h>
 #include "flitheader.h"
 #include "replay-buffer.h"
-
+#include "ns3/flow-stat-tag.h" // 【新增】
 namespace ns3 {
 inline int SeqDist(uint16_t seq1, uint16_t seq2) {
     // 利用 int16_t 的溢出特性计算循环序列号距离
@@ -44,6 +44,10 @@ inline int SeqDist(uint16_t seq1, uint16_t seq2) {
 }
 class RdmaEgressQueue : public Object{
 public:
+// 【新增】定义回调类型和成员
+    typedef Callback<void, Ptr<RdmaQueuePair>> TxQpFinishCallback;
+    TxQpFinishCallback m_txQpFinishCb;
+
 	static const uint32_t qCnt = 8;
 	static uint32_t ack_q_idx;
   uint32_t m_mtu=1392;
@@ -288,6 +292,9 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
   std::vector<ECNAccount> *m_ecn_source;
 
 public:
+
+
+
 	Ptr<RdmaEgressQueue> m_rdmaEQ;
 	void RdmaEnqueueHighPrioQ(Ptr<Packet> p);
 

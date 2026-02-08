@@ -150,6 +150,11 @@ void RdmaHw::Setup(QpCompleteCallback cb) {
         // config NIC
         dev->m_rdmaEQ->m_mtu = m_mtu;
         dev->m_rdmaEQ->m_rdmaGetNxtPkt = MakeCallback(&RdmaHw::GetNxtPacket, this);
+        // =========================================================
+        // 【新增】绑定 DeleteQueuePair
+        // =========================================================
+        // 意思：当 device 调用 m_txQpFinishCb 时，实际上执行的是 RdmaHw::DeleteQueuePair
+        dev->m_rdmaEQ->m_txQpFinishCb = MakeCallback(&RdmaHw::DeleteQueuePair, this);
     }
     // setup qp complete callback
     m_qpCompleteCallback = cb;
@@ -270,31 +275,40 @@ void RdmaHw::DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t p
 }
 
 int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
-    // 1. 获取 Flit 信息
+    
+    // 1. 获取 Flit 基础信息
     FlitHeader fh;
-    p->PeekHeader(fh); // 先偷看，不移除，因为后面 HEAD/SINGLE 还要解析 IP 头
+    p->PeekHeader(fh); 
     uint8_t type = fh.GetType(); // 0=HEAD, 1=BODY, 2=TAIL, 3=SINGLE
-    uint32_t flitLen = fh.GetPacketLen(); // Flit 占用的 Credit 数
-    // 【修改点 1】初始化 rxQp 为缓存的 QP (针对 BODY/TAIL)
+    
+    // 获取当前 Flit 的物理 Payload 大小 (扣除 FlitHeader 后的长度)
+    // 注意：GetSize() 是包的总长，GetSerializedSize() 是 Flit头 的长度
+    uint32_t rawPayloadSize = p->GetSize() - fh.GetSerializedSize();
+
+    // 初始化 QP 指针
     Ptr<RdmaRxQueuePair> rxQp = m_currentRxQp;
     uint32_t nodeId = m_node->GetId();
+
+    // =========================================================
+    // 阶段 A: QP 查找与初始化 (针对 HEAD/SINGLE)
+    // =========================================================
     if (type == 0 || type == 3) {
+        // 临时移除 FlitHeader 以便读取 CustomHeader (路由/流标识信息)
+        p->RemoveHeader(fh); 
+        p->PeekHeader(ch);   
         
-        p->RemoveHeader(fh); // HEAD 或 SINGLE 包，移除 Flit 头
-        p->PeekHeader(ch); // 偷看 CustomHeader，准备后续处理
         rxQp = GetRxQp(ch.dip, ch.sip, ch.udp.dport, ch.udp.sport, ch.udp.pg, true);
         if (rxQp == NULL) {
-        uint64_t rxKey = GetRxQpKey(ch.sip, ch.udp.sport, ch.udp.dport, ch.udp.pg);
-        if (akashic_RxQp.find(rxKey) != akashic_RxQp.end()) {
-            // printf("[GetRxQPUDP] Akashic access: %u(%d) -> %u(%d)\n", this->m_node->GetId(),
-            // ch.udp.dport, ch.sip, ch.udp.sport);
-            return 1;  // just drop
-        } else {
-            printf("ERROR: UDP NIC cannot find the flow\n");
-            exit(1);
+            // 找不到 QP，可能是已经结束的流
+            uint64_t rxKey = GetRxQpKey(ch.sip, ch.udp.sport, ch.udp.dport, ch.udp.pg);
+            if (akashic_RxQp.find(rxKey) != akashic_RxQp.end()) {
+                return 1; // Drop duplicated packet for finished flow
+            } else {
+                printf("ERROR: UDP NIC cannot find the flow\n");
+                exit(1);
+            }
         }
-    }
-    std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
+        std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
     if (ch.udp.seq != rxQp->expected_seq) { // 校验序号
         //报错，这是不正常的，说明机制有问题
         printf("ERROR: UDP NIC received out-of-order flit seq %u, expected %u\n",
@@ -304,22 +318,181 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
     }
     std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
     rxQp->expected_seq+=fh.GetPktTotalBytes(); // 更新期望的下一个序号
-    m_currentRxQp = rxQp;
-    }
-    //对于body和tail包，完全不用管，我只要头包对上了，就基本可以认为是正确的了
-        // 在函数的最后，return 0 之前：
+        // 把 FlitHeader 加回去，保持包的完整性 (如果后续还需要处理)
+        // 或者因为我们已经拿到了 rawPayloadSize，这里不加回去也行，看后续逻辑
+        p->AddHeader(fh); 
 
-        if (rxQp) {
-        uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
-        // 加上越界检查更安全
-        if (nic_idx < m_nic.size()) {
-            Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
-            if (dev) {
-                dev->ReleaseRxCredit(1);
-            }
+        // 更新缓存
+        m_currentRxQp = rxQp;
+    }
+
+    
+
+    // =========================================================
+    // 阶段 B: 提取流元数据 (Size & StartTime)
+    // =========================================================
+    double flowStartTime = 0;
+    
+    // 尝试从 Tag 中恢复流的总大小 (rxQp->m_size) 和 开始时间
+    // 只要 rxQp->m_size 还是 0，就说明我们还没拿到“总任务书”
+    if (rxQp->m_size == 0) {
+        FlowIDNUMTag fint;
+        if (p->PeekPacketTag(fint)) {
+            rxQp->m_size = fint.GetFlowSize();
         }
     }
+    
+    // 每次都尝试拿时间戳，因为 FCT 计算依赖它
+    FlowStatTag fst;
+    if (p->PeekPacketTag(fst)) {
+        flowStartTime = fst.getFlowStartTime(); // 使用我们之前加的专用字段
+    }
+
+
+    // =========================================================
+    // 阶段 D: 精准数据累加 (Data Accumulation)
+    // =========================================================
+    uint32_t effectiveDataBytes = 0;
+
+    if (type == 0 || type == 3) { 
+        // >>> HEAD 或 SINGLE 包 <<<
+        // 结构: [FlitHeader | Protocol Headers (IP/UDP/etc) | Actual Data]
+        // 我们只统计 Actual Data
+        if (rawPayloadSize >= PROTOCOL_HEADER_SIZE) {
+            effectiveDataBytes = rawPayloadSize - PROTOCOL_HEADER_SIZE;
+        } else {
+            // 异常：包太小，连头都装不下？可能是纯控制包或错误
+            effectiveDataBytes = 0; 
+        }
+    } else {
+        // >>> BODY 或 TAIL 包 <<<
+        // 结构: [FlitHeader | Actual Data]
+        // 全都是数据
+        effectiveDataBytes = rawPayloadSize;
+    }
+
+     // 累加到 QP 中
+    rxQp->received_bytes += effectiveDataBytes;
+    
+    std::cout << "   -> Type: " << (int)type 
+              << " Raw: " << rawPayloadSize 
+              << " Effective: " << effectiveDataBytes 
+              << " TotalRecv: " << rxQp->received_bytes 
+              << " / Target: " << rxQp->m_size << std::endl;
+
+    // =========================================================
+    // 阶段 E: 流结束判断 (Finish Check)
+    // =========================================================
+    // 只有当 累计接收的数据量 >= 预设的总大小时，才算真正结束
+    // 且必须知道 m_size (防止 m_size 为 0 时的误判)
+    if (rxQp->m_size > 0 && rxQp->received_bytes >= rxQp->m_size) {
+        
+        std::cout << "!!! FLOW FINISH DETECTED FlowID: " << rxQp->m_flow_id << std::endl;
+
+        if (flowStartTime > 0 && !m_rxFlowCompleteCb.IsNull()) {
+            // 触发回调，记录 FCT
+            m_rxFlowCompleteCb(rxQp, flowStartTime);
+        } else {
+            NS_LOG_WARN("Flow finished but missing start time tag!");
+        }
+        
+        
+    }
+
+    // =========================================================
+    // 阶段 F: 释放 Credit (流控)
+    // =========================================================
+    uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
+    if (nic_idx < m_nic.size()) {
+        Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
+        if (dev) {
+            // 释放 1 个 Flit 的空间 (注意这里是按 Flit 个数释放，不是字节)
+            dev->ReleaseRxCredit(1); 
+        }
+    }
+
     return 0;
+
+
+    // // 1. 获取 Flit 信息
+    // FlitHeader fh;
+    // p->PeekHeader(fh); // 先偷看，不移除，因为后面 HEAD/SINGLE 还要解析 IP 头
+    // uint8_t type = fh.GetType(); // 0=HEAD, 1=BODY, 2=TAIL, 3=SINGLE
+
+    // uint32_t flitLen = fh.GetPacketLen(); // Flit 占用的 Credit 数
+    // // 【修改点 1】初始化 rxQp 为缓存的 QP (针对 BODY/TAIL)
+    // Ptr<RdmaRxQueuePair> rxQp = m_currentRxQp;
+    // uint32_t nodeId = m_node->GetId();
+
+    // if (type == 0 || type == 3) {
+        
+    //     p->RemoveHeader(fh); // HEAD 或 SINGLE 包，移除 Flit 头
+    //     p->PeekHeader(ch); // 偷看 CustomHeader，准备后续处理
+    //     rxQp = GetRxQp(ch.dip, ch.sip, ch.udp.dport, ch.udp.sport, ch.udp.pg, true);
+    //     if (rxQp == NULL) {
+    //     uint64_t rxKey = GetRxQpKey(ch.sip, ch.udp.sport, ch.udp.dport, ch.udp.pg);
+    //     if (akashic_RxQp.find(rxKey) != akashic_RxQp.end()) {
+    //         // printf("[GetRxQPUDP] Akashic access: %u(%d) -> %u(%d)\n", this->m_node->GetId(),
+    //         // ch.udp.dport, ch.sip, ch.udp.sport);
+    //         return 1;  // just drop
+    //     } else {
+    //         printf("ERROR: UDP NIC cannot find the flow\n");
+    //         exit(1);
+    //     }
+    // }
+    // std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
+    // if (ch.udp.seq != rxQp->expected_seq) { // 校验序号
+    //     //报错，这是不正常的，说明机制有问题
+    //     printf("ERROR: UDP NIC received out-of-order flit seq %u, expected %u\n",
+    //            ch.udp.seq, rxQp->expected_seq);
+    //            exit(1);
+
+    // }
+    // std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
+    // rxQp->expected_seq+=fh.GetPktTotalBytes(); // 更新期望的下一个序号
+    // m_currentRxQp = rxQp;
+    // }
+    // //对于body和tail包，完全不用管，我只要头包对上了，就基本可以认为是正确的了
+    //     // 在函数的最后，return 0 之前：
+    
+    // // =========================================================
+    // // 阶段 B: 提取流信息 (从 Tag 中获取 Size 和 StartTime)
+    // // =========================================================
+    // // 只要 rxQp 存在，我们就尝试读取 Tag 来完善 rxQp 的信息
+    // // 尤其是 m_size，如果之前没读到过，现在必须读到
+    // double flowStartTime = 0;
+    // if (rxQp) {
+    //     // 1. 提取流的总大小
+    //     if (rxQp->m_size == 0) {
+    //         FlowIDNUMTag fint;
+    //         if (p->PeekPacketTag(fint)) {
+    //             rxQp->m_size = fint.GetFlowSize();
+    //             // std::cout << "DEBUG: RxQP initialized size: " << rxQp->m_size << std::endl;
+    //         }
+    //     }
+
+    //     // 2. 提取流的开始时间 (用于计算 FCT)
+    //     FlowStatTag fst;
+    //     if (p->PeekPacketTag(fst)) {
+    //         // 注意：这里调用的是我们之前修改过的 getFlowStartTime()
+    //         flowStartTime = fst.getFlowStartTime(); 
+    //     }
+    // }    
+
+
+
+
+    //     if (rxQp) {
+    //     uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
+    //     // 加上越界检查更安全
+    //     if (nic_idx < m_nic.size()) {
+    //         Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
+    //         if (dev) {
+    //             dev->ReleaseRxCredit(1);
+    //         }
+    //     }
+    // }
+    // return 0;
     
 }
 
@@ -461,6 +634,9 @@ Ptr<Packet> RdmaHw::GetNxtPacket(Ptr<RdmaQueuePair> qp) {
             }
             packet_pos = fst.GetType();
             fst.setInitiatedTime(Simulator::Now().GetSeconds());
+            // 2. 【新增】填入 QP 的开始时间 (流开始时间)
+            // qp->startTime 是在 RdmaQueuePair 构造时记录的
+            fst.setFlowStartTime(qp->startTime.GetSeconds());
             p->AddPacketTag(fst);
         }
     }

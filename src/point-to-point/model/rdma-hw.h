@@ -11,7 +11,7 @@
 
 #include "qbb-net-device.h"
 #include "rdma-queue-pair.h"
-
+#define PROTOCOL_HEADER_SIZE 48
 namespace ns3 {
 
 struct RdmaInterfaceMgr {
@@ -21,9 +21,19 @@ struct RdmaInterfaceMgr {
     RdmaInterfaceMgr() : dev(NULL), qpGrp(NULL) {}
     RdmaInterfaceMgr(Ptr<QbbNetDevice> _dev) { dev = _dev; }
 };
-
+typedef Callback<void, Ptr<RdmaRxQueuePair>, double> RxFlowCompleteCallback;
 class RdmaHw : public Object {
    public:
+   
+   RxFlowCompleteCallback m_rxFlowCompleteCb;
+
+    //定义设置函数
+    void SetRxFlowCompleteCallback(RxFlowCompleteCallback cb) {
+        m_rxFlowCompleteCb = cb;
+    }
+
+
+
     static TypeId GetTypeId(void);
     RdmaHw();
     Ptr<RdmaRxQueuePair> m_currentRxQp; // 用于缓存当前正在接收的 QP

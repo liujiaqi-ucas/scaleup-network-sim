@@ -464,37 +464,69 @@ void conweave_history_print() {
 /**
  * @brief When one RDMA is finished, so does (1) QP, (2) RxQP, (3) write it on file fct.txt.
  */
-void qp_finish(FILE *fout, Ptr<RdmaQueuePair> q) {
-    uint32_t sid = Settings::ip_to_node_id(q->sip), did = Settings::ip_to_node_id(q->dip);
-    uint64_t base_rtt = pairRtt[n.Get(sid)][n.Get(did)];
-    uint64_t b = pairBw[n.Get(sid)][n.Get(did)];
-    uint32_t total_bytes =
-        q->m_size + ((q->m_size - 1) / packet_payload_size + 1) *
-                        (CustomHeader::GetStaticWholeHeaderSize() -
-                         IntHeader::GetStaticSize());  // translate to the minimum bytes required
-                                                       // (with header but no INT)
-    uint64_t standalone_fct = base_rtt + total_bytes * 8000000000lu / b;
+// void qp_finish(FILE *fout, Ptr<RdmaQueuePair> q) {
+//     uint32_t sid = Settings::ip_to_node_id(q->sip), did = Settings::ip_to_node_id(q->dip);
+//     uint64_t base_rtt = pairRtt[n.Get(sid)][n.Get(did)];
+//     uint64_t b = pairBw[n.Get(sid)][n.Get(did)];
+//     uint32_t total_bytes =
+//         q->m_size + ((q->m_size - 1) / packet_payload_size + 1) *
+//                         (CustomHeader::GetStaticWholeHeaderSize() -
+//                          IntHeader::GetStaticSize());  // translate to the minimum bytes required
+//                                                        // (with header but no INT)
+//     uint64_t standalone_fct = base_rtt + total_bytes * 8000000000lu / b;
 
-    // XXX: remove rxQP from the receiver
-    Ptr<Node> dstNode = n.Get(did);
-    Ptr<RdmaDriver> rdma = dstNode->GetObject<RdmaDriver>();
-    rdma->m_rdma->DeleteRxQp(q->sip.Get(), q->sport, q->dport, q->m_pg);
+//     // XXX: remove rxQP from the receiver
+//     Ptr<Node> dstNode = n.Get(did);
+//     Ptr<RdmaDriver> rdma = dstNode->GetObject<RdmaDriver>();
+//     rdma->m_rdma->DeleteRxQp(q->sip.Get(), q->sport, q->dport, q->m_pg);
 
-    // fprintf(fout, "%lu QP complete\n", Simulator::Now().GetTimeStep());
-    fprintf(fout, "%u %u %u %u %lu %lu %lu %lu\n", Settings::ip_to_node_id(q->sip),
-            Settings::ip_to_node_id(q->dip), q->sport, q->dport, q->m_size,
-            q->startTime.GetTimeStep(), (Simulator::Now() - q->startTime).GetTimeStep(),
-            standalone_fct);
+//     // fprintf(fout, "%lu QP complete\n", Simulator::Now().GetTimeStep());
+//     fprintf(fout, "%u %u %u %u %lu %lu %lu %lu\n", Settings::ip_to_node_id(q->sip),
+//             Settings::ip_to_node_id(q->dip), q->sport, q->dport, q->m_size,
+//             q->startTime.GetTimeStep(), (Simulator::Now() - q->startTime).GetTimeStep(),
+//             standalone_fct);
 
-    // for debugging
-    NS_LOG_DEBUG("%u %u %u %u %lu %lu %lu %lu\n" %
-                 (Settings::ip_to_node_id(q->sip), Settings::ip_to_node_id(q->dip), q->sport,
-                  q->dport, q->m_size, q->startTime.GetTimeStep(),
-                  (Simulator::Now() - q->startTime).GetTimeStep(), standalone_fct));
+//     // for debugging
+//     NS_LOG_DEBUG("%u %u %u %u %lu %lu %lu %lu\n" %
+//                  (Settings::ip_to_node_id(q->sip), Settings::ip_to_node_id(q->dip), q->sport,
+//                   q->dport, q->m_size, q->startTime.GetTimeStep(),
+//                   (Simulator::Now() - q->startTime).GetTimeStep(), standalone_fct));
+//     Settings::cnt_finished_flows++;
+//     fflush(fout);
+// }
+// 这个函数替代原来的 qp_finish
+void rx_flow_finish(FILE *fout, Ptr<RdmaRxQueuePair> rxQp, double startTime) {
+    // 1. 获取基本信息
+    uint32_t srcId = Settings::ip_to_node_id(Ipv4Address(rxQp->sip));
+    uint32_t dstId = Settings::ip_to_node_id(Ipv4Address(rxQp->dip));
+    
+    // 2. 计算 FCT
+    // 注意：startTime 是从 Tag 里取出的秒 (double)，需要转换时间步
+    uint64_t startTs = (uint64_t)(startTime * 1e9); // 转纳秒 (假设 TimeStep 是纳秒)
+    uint64_t endTs = Simulator::Now().GetTimeStep(); // 当前时间
+    uint64_t fct = endTs - startTs;
+
+    // 3. 写入文件
+    // 格式保持和你原来的一致: src dst sport dport size start fct standalone_fct
+    // 注意：rxQp->m_size 必须是你之前逻辑里正确赋值过的
+    if (fout) {
+        fprintf(fout, "%u %u %u %u %lu %lu %lu %lu\n",
+                srcId, dstId, 
+                rxQp->sport, rxQp->dport, 
+                rxQp->m_size, 
+                startTs, 
+                fct, 
+                fct); // standalone_fct 暂时用 fct 代替，或者你需要另外计算
+        fflush(fout);
+    }
+
+    // 4. 【关键】更新全局计数器，否则仿真永远不会停！
     Settings::cnt_finished_flows++;
-    fflush(fout);
+    
+    // 5. 打印日志方便调试
+    std::cout << ">>> Flow Finished: " << srcId << "->" << dstId 
+              << " FCT: " << fct << " ns" << std::endl;
 }
-
 /**
  * @brief PFC event logging
  */
@@ -1522,7 +1554,11 @@ std::cout<<"333333333"<<std::endl;
             //     Simulator::Schedule(NanoSeconds(cnp_mon_start), &cnp_freq_monitoring, cnp_output,
             //                         rdmaHw);
             // }
-
+            // =========================================================
+            // 【修改点 1】在这里绑定接收端回调！
+            // =========================================================
+            // 告诉 RdmaHw：当流结束时，请调用 rx_flow_finish，并把 fct_output 带上
+            rdmaHw->SetRxFlowCompleteCallback(MakeBoundCallback(&rx_flow_finish, fct_output));
             // create and install RdmaDriver
             Ptr<RdmaDriver> rdma = CreateObject<RdmaDriver>();
             Ptr<Node> node = n.Get(i);
@@ -1531,8 +1567,8 @@ std::cout<<"333333333"<<std::endl;
 
             node->AggregateObject(rdma);
             rdma->Init();
-            rdma->TraceConnectWithoutContext("QpComplete",
-                                             MakeBoundCallback(qp_finish, fct_output));
+            //rdma->TraceConnectWithoutContext("QpComplete",
+                                             //MakeBoundCallback(qp_finish, fct_output));
         }
     }
     std::cout<<"8888888"<<std::endl;

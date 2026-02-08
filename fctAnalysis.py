@@ -38,7 +38,7 @@ if __name__=="__main__":
 	parser.add_argument('-dir', '--dir', dest='dir', default='.', action='store', help="directory of run.py file, default='.'")
 	parser.add_argument('-fdir', '--fdir', dest='fdir', default='mix', action='store', help="folder that the output files are located, default=mix")
 	parser.add_argument('-bdp', dest='bdp', action='store', required=True, help="1 BDP of this topology, default=104000 (100G with 2-tier)")
-	parser.add_argument('-sT', dest='time_limit_begin', action='store', type=int, default=2005000000, help="only consider flows that finish after T, default=2.005*10^9 ns")
+	parser.add_argument('-sT', dest='time_limit_begin', action='store', type=int, default=2000000000, help="only consider flows that finish after T, default=2.005*10^9 ns")
 	parser.add_argument('-fT', dest='time_limit_end', action='store', type=int, default=100000000000, help="only consider flows that finish before T, default=100 * 10^9 ns")
 	
 	args = parser.parse_args()

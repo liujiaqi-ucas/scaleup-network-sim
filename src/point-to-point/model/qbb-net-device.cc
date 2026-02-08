@@ -130,6 +130,9 @@ int RdmaEgressQueue::GetNextQindex() {  // 从队列对里面选一个队列，�
             // 如果没数据了，检查是否彻底结束
             if (qp->IsFinishedConst()) {
                 m_qpGrp->SetQpFinished(curr);
+                // 【核心调用】这会直接触发 RdmaHw::DeleteQueuePair(qp)
+                 m_txQpFinishCb(qp);
+             
             }
             continue;
         }
@@ -339,7 +342,7 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     // 如果 offset=0 (Head Flit)，它自动包含了 IP/TCP 头部。
     // 如果 offset>0 (Body Flit)，它自动全是 Payload 数据。
     Ptr<Packet> flitPayload = m_currentLargePacket->CreateFragment(currentOffset, currentFragmentSize);
-
+     
     // =========================================================
     // 3. 【分配序号】(用于 GBN/SR 重传)
     // =========================================================
@@ -415,6 +418,20 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     // 把 FlitHeader 贴到切片前面
     flitPayload->AddHeader(fh);
     // =========================================================
+    // 【关键新增】 搬运身份证 (Tag)
+    // =========================================================
+    FlowStatTag fst;
+    if (m_currentLargePacket->PeekPacketTag(fst)) {
+        // 复制 FlowStatTag (包含时间戳)
+        flitPayload->AddPacketTag(fst);
+    }
+    
+    FlowIDNUMTag fint;
+    if (m_currentLargePacket->PeekPacketTag(fint)) {
+        // 复制 FlowIDNUMTag (包含流 ID 和总大小)
+        flitPayload->AddPacketTag(fint);
+    }
+    // =========================================================
     // 6. 【存入重传缓冲区】
     // =========================================================
     // flitPayload 此时包含了 [FlitHeader | Slice of Original Packet]
@@ -433,7 +450,7 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
         m_currentFlitIdx = 0; // 重置索引
         // 注意：m_next_seq_num 不重置，因为它是链路级的全局序号
     }
-
+    
     // =========================================================
     // 8. 发送
     // =========================================================

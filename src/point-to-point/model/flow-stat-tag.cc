@@ -6,7 +6,7 @@
 #include "flow-stat-tag.h"
 
 namespace ns3 {
-FlowStatTag::FlowStatTag() : flow_stat(FLOW_NOTEND) {}
+FlowStatTag::FlowStatTag() : flow_stat(FLOW_NOTEND),flowStartTime(0.0) {}
 
 TypeId FlowStatTag::GetTypeId(void) {
     static TypeId tid = TypeId("ns3::FlowStatTag").SetParent<Tag>().AddConstructor<FlowStatTag>();
@@ -15,12 +15,14 @@ TypeId FlowStatTag::GetTypeId(void) {
 TypeId FlowStatTag::GetInstanceTypeId(void) const { return GetTypeId(); }
 
 uint32_t FlowStatTag::GetSerializedSize(void) const {
-    return sizeof(flow_stat) + sizeof(initiatedTime);
+    return sizeof(flow_stat) + sizeof(initiatedTime) + sizeof(flowStartTime);
 }
 
 void FlowStatTag::Serialize(TagBuffer i) const {
     i.WriteU8(flow_stat);
     i.WriteDouble(initiatedTime);
+    // 【新增】
+    i.WriteDouble(flowStartTime);
 }
 
 void FlowStatTag::Deserialize(TagBuffer i) {
@@ -29,6 +31,8 @@ void FlowStatTag::Deserialize(TagBuffer i) {
     flow_stat = t;
     double t2 = i.ReadDouble();
     initiatedTime = t2;
+    // 【新增】
+    flowStartTime = i.ReadDouble();
 }
 
 void FlowStatTag::SetType(uint8_t ttl) {
@@ -46,7 +50,9 @@ void FlowStatTag::Print(std::ostream& os) const {
         os << "Flow Continuing: Yes";
     }
 }
-
+// 5. 实现新方法
+void FlowStatTag::setFlowStartTime(double t) { this->flowStartTime = t; }
+double FlowStatTag::getFlowStartTime() { return this->flowStartTime; }
 void FlowStatTag::setInitiatedTime(double t) { this->initiatedTime = t; }
 
 double FlowStatTag::getInitiatedTime() { return this->initiatedTime; }

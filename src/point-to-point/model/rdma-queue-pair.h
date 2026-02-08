@@ -68,7 +68,7 @@ class RdmaQueuePair : public Object {
     void SetFlowId(int32_t v);
     uint64_t GetBytesLeft();
     uint32_t GetHash(void);
-    inline bool IsFinishedConst() const { return snd_nxt >= m_size; }
+    inline bool IsFinishedConst() const { return snd_nxt >= m_size;}
     // 核心逻辑：发送端是否发完了？(注意：发完不代表对面收完)
     bool IsFinished();
     
@@ -81,7 +81,12 @@ class RdmaRxQueuePair : public Object {  // Rx side queue pair
     uint16_t m_ipid;
     int32_t m_flow_id;
    uint32_t expected_seq; // 期望收到的下一个序号
-    
+    // ==========================================
+    // 【新增】存储流的总大小
+    // ==========================================
+    uint64_t m_size;
+    // 【新增】实际接收到的纯数据字节数 (Accumulator)
+    uint64_t received_bytes;
     static TypeId GetTypeId(void);
     RdmaRxQueuePair();
     uint32_t GetHash(void);
