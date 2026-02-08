@@ -343,7 +343,7 @@ bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> pack
 }
 
 
-void SwitchNode::cantransmit(int inDev){
+bool SwitchNode::cantransmit(int inDev){
     Ptr<NetDevice> baseDev = m_devices[inDev];
     Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
     return qbbDev->cantransmit();

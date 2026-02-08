@@ -37,11 +37,11 @@
 #include "flitheader.h"
 #include"sr-header.h"
 #include"rx-buffer.h"
-//#include "replay-buffer.h"
 #include "sr-replaybuffer.h"
+#include"flow-stat-tag.h"
 #define MAX_SN 65536//序号空间
 #define m_bufferSize 512//重传缓冲区的空间
-#define m_rttEstimate //这个是冷却时间
+#define m_rttEstimate 5000//这个是冷却时间,单位是ns
 namespace ns3 {
 inline int SeqDist(uint16_t seq1, uint16_t seq2) {
     // 利用 int16_t 的溢出特性计算循环序列号距离
@@ -49,6 +49,9 @@ inline int SeqDist(uint16_t seq1, uint16_t seq2) {
 }
 class RdmaEgressQueue : public Object{
 public:
+// 【新增】定义回调类型和成员
+    typedef Callback<void, Ptr<RdmaQueuePair>> TxQpFinishCallback;
+    TxQpFinishCallback m_txQpFinishCb;
 	static const uint32_t qCnt = 8;
 	static uint32_t ack_q_idx;
   uint32_t m_mtu=1392;
@@ -99,9 +102,9 @@ public:
     // 参数 is_nack: true 发 NACK, false 发 ACK (一般用于重复包的立即重确认)
 // 参数 seq: 期望收到的序号 (对于 NACK) 或 确认序号 (对于 ACK)
 void SendControlFlit(bool is_nack, uint16_t seq);
-void processnak(uint16_t nack_seq);//处理收到的nak的函数
+void processnak(uint16_t firstMissing, uint32_t bitmap);//处理收到的nak的函数
 void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
- uint16_t m_next_seq_num;//下一个要分配的flit的序号
+ //uint16_t m_next_seq_num;//下一个要分配的flit的序号
  uint16_t m_last_acked_seq;//最后一个被接收端ack的flit序号，也就是发送窗口左边界的上一个序号
  //Ptr<Packet> sendptr;//指向下一个待发送flit的指针
  //uint16_t m_replay_trigger_seq;//触发这一轮重传的序号，用于过滤重复的nak
@@ -176,13 +179,14 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     
    //************************************************************************************ */
    //sr要维护的变量，发送端
-   uint32_t m_txuna;//窗口左边缘，最早发出去但是还没收到确认的SX
-   uint32_t next;//下一个要分配个新数据的flitnumber
-   uint32_t m_windowsize;//发送窗口大小
+   uint32_t m_txUna;//窗口左边缘，最早发出去但是还没收到确认的SX
+   
+   uint16_t m_next_seq_num;//下一个要分配的flit的序号
+   //uint32_t m_windowsize;//发送窗口大小
    Ptr<ReplayBuffer> m_replayBuffer;//重传缓冲区
    //接收端
    
-   RxBuffer *m_rxBuffer;//这个是重排序缓冲区
+   Ptr<RxBuffer> m_rxBuffer;//这个是重排序缓冲区
    // 这就是你的"本地位图"，它长久存在
     std::vector<bool> m_isReceived;
     uint16_t m_rxNext;       // 【ACK 指针】：连续收到的最高序号 + 1
@@ -200,8 +204,11 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     bool nakflag;//表示当前有nak要发送
     uint16_t nakseq;//表示当前要发送的nak序号
     uint32_t nakbitmap;//表示当前要发送的nak位图
-
-    
+    void UpdateRtoTimer();
+    void HandleRtoTimeout ();
+    Time m_rtoBase;  // 必须在这里
+    Time m_rtoValue;
+    EventId m_rtoEvent;
    //*********************************************************************************** */
   static TypeId GetTypeId (void);
 

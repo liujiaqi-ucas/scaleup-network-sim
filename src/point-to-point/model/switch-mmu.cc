@@ -62,37 +62,37 @@ void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
     // 记录：inDev 正在等待 outDev 的空间
     m_waitingForLock[outDev].insert(inDev);
 }
-void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {//这个函数就完全不用了
-    uint32_t psize = p->GetSize();
+// void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {//这个函数就完全不用了
+//     uint32_t psize = p->GetSize();
 
-    // 1. 【准入检查】(流控底线)
-    // 只有一个 VC，qIndex 固定传 0
-    if (!CheckIngressAdmission(inDev, 3, psize)) {
-        //Drop(p); 
-        //这应该直接报错，因为流控失效了
-        NS_FATAL_ERROR("SwitchMmu::Input(): Ingress Admission Control Failed!");
-        return;
-    }
+//     // 1. 【准入检查】(流控底线)
+//     // 只有一个 VC，qIndex 固定传 0
+//     if (!CheckIngressAdmission(inDev, 3, psize)) {
+//         //Drop(p); 
+//         //这应该直接报错，因为流控失效了
+//         NS_FATAL_ERROR("SwitchMmu::Input(): Ingress Admission Control Failed!");
+//         return;
+//     }
 
-    // 2. 【物理入账】(占用共享内存)
-    UpdateIngressAdmission(inDev, 3, psize);
+//     // 2. 【物理入账】(占用共享内存)
+//     UpdateIngressAdmission(inDev, 3, psize);
 
-    // 3. 【物理入队】(存入暂存队列)
-    m_ingressQueues[inDev].push_back(p);
-    std::cout<<"Node "<<m_node->GetId()<<" device "<<inDev<<"  m_ingressQueues  长度是"<<m_ingressQueues[inDev].size()<<std::endl;
-     // 【核心修复】：如果当前端口被阻塞了，绝对不能尝试发送！
-    if (m_ingressBlocked[inDev]) {
-        // 既然阻塞了，说明队头那个包还没搞定，新来的包（无论是 Body 还是别的）
-        // 都只能乖乖排队，等着被 ProcessIngressQueue 轮询到。
-        return; 
-    }
-    // 4. 【初次推动】
-    // 如果队列之前是空的，说明没人排队，我有机会直接走，赶紧试一下
-    if (m_ingressQueues[inDev].size() == 1) {
-        std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" ingress队列只有我一个，我试一下直接转发"<<std::endl;
-        ArbitrateAndSend(inDev);
-    }
-}
+//     // 3. 【物理入队】(存入暂存队列)
+//     m_ingressQueues[inDev].push_back(p);
+//     std::cout<<"Node "<<m_node->GetId()<<" device "<<inDev<<"  m_ingressQueues  长度是"<<m_ingressQueues[inDev].size()<<std::endl;
+//      // 【核心修复】：如果当前端口被阻塞了，绝对不能尝试发送！
+//     if (m_ingressBlocked[inDev]) {
+//         // 既然阻塞了，说明队头那个包还没搞定，新来的包（无论是 Body 还是别的）
+//         // 都只能乖乖排队，等着被 ProcessIngressQueue 轮询到。
+//         return; 
+//     }
+//     // 4. 【初次推动】
+//     // 如果队列之前是空的，说明没人排队，我有机会直接走，赶紧试一下
+//     if (m_ingressQueues[inDev].size() == 1) {
+//         std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" ingress队列只有我一个，我试一下直接转发"<<std::endl;
+//         ArbitrateAndSend(inDev);
+//     }
+// }
 
 
 void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
@@ -102,7 +102,7 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
          return;
      }
     
-    Ptr<NetDevice> baseDev = m_devices[inDev];
+    Ptr<NetDevice> baseDev = m_node->GetDevice(inDev);
     Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
     //循环处理队列中的包
     while (qbbDev->m_forwardNext != qbbDev->m_rxNext) {//在rx里面循环遍历，直到结束
@@ -121,7 +121,7 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             // A. 发送成功
             // ----------------------------------------------------
             //物理出队
-            qbbDev->m_rxBuffer->ClearEntry(m_forwardNext);//清理槽位
+            qbbDev->m_rxBuffer->ClearEntry(qbbDev->m_forwardNext);//清理槽位
             qbbDev->m_forwardNext=(qbbDev->m_forwardNext+1)%MAX_SN;//更新转发指针
             //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false
@@ -175,9 +175,11 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
         // 这样就避免了误唤醒那些等待 Credit 的人，或者刚来的人。
         // m_waitingForLock 是 std::set，count 很快
         if (m_waitingForLock[outDev].count(curr)) {
-            
+            Ptr<NetDevice> baseDev = m_node->GetDevice(curr);
+            Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
             // 双重保险：检查队列是否非空
-            if (!m_ingressQueues[curr].empty()) {
+            if (!qbbDev->m_rxBuffer->IsEmpty()) {
+                 
                 
                 // 1. 移除等待名单 (必须先做)
                 m_waitingForLock[outDev].erase(curr);

@@ -91,6 +91,9 @@ RdmaRxQueuePair::RdmaRxQueuePair() {
     sip = dip = sport = dport = 0;
     m_ipid = 0;
     expected_seq=0;
+    m_size=0;
+    // 【新增】初始化
+    received_bytes = 0;
 }
 
 uint32_t RdmaRxQueuePair::GetHash(void) {

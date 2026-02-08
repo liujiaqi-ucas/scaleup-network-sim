@@ -27,8 +27,11 @@ def build(bld):
         'model/letflow-routing.cc',
         'model/conweave-routing.cc',
         'model/conweave-voq.cc',
-        'model/replay-buffer.cc',
+        
         'model/flitheader.cc',
+        'model/sr-header.cc',
+        'model/sr-replaybuffer.cc',
+        'model/rx-buffer.cc',
 		'helper/selective-packet-queue.cc',
         ]
 
@@ -65,8 +68,11 @@ def build(bld):
         'model/letflow-routing.h',
         'model/conweave-routing.h',
         'model/conweave-voq.h',
-        'model/replay-buffer.h',
+        
         'model/flitheader.h',
+        'model/sr-header.h',
+        'model/sr-replaybuffer.h',
+        'model/rx-buffer.h',
 		'helper/selective-packet-queue.h',
         ]
 

@@ -4,20 +4,20 @@
 #include "ns3/nstime.h"
 #include "ns3/ptr.h"
 #include "ns3/simulator.h"
+#include "ns3/packet.h"
 #include <vector>
 #include <stdint.h>
 #define MAX_SN 65536  // 假设最大序列号为 16-bit 回绕
 namespace ns3 {
 
-// 前向声明 Flit 类，假设你已经在其他地方定义了它
-class Flit;
+
 
 /**
  * @brief 重传缓冲区的单个条目
  * 维护 Flit 指针及其发送状态
  */
 struct ReplayEntry {
-    Ptr<Flit> flit;         // 数据副本
+    Ptr<Packet> flit;         // 数据副本
     bool isAcked;           // true: 对方已收到; false: 等待确认
     bool isRetransmitting;  // true: 正在重传队列中 (防止重复入队)
     Time lastSentTime;      // 上次物理发送的时间 (用于 RTT 冷却判断)
@@ -33,7 +33,7 @@ struct ReplayEntry {
  * @brief 基于环形数组的重传缓冲区
  * 用于 Link Layer 的选择重传 (SR) 协议
  */
-class ReplayBuffer {
+class ReplayBuffer : public SimpleRefCount<ReplayBuffer> {
 public:
     /**
      * @param size 缓冲区大小 (例如 128)
@@ -46,7 +46,7 @@ public:
      * @param sn 序列号
      * @param flit Flit 指针
      */
-    void AddNewPacket(uint16_t sn, Ptr<Flit> flit);
+    void AddNewPacket(uint16_t sn, Ptr<Packet> flit);
 
     /**
      * @brief 标记某个 SN 为已确认 (ACKED)
@@ -66,7 +66,7 @@ public:
     /**
      * @brief 获取 Flit 指针 (用于重传发送)
      */
-    Ptr<Flit> GetFlit(uint16_t sn);
+    Ptr<Packet> GetFlit(uint16_t sn);
 
     /**
      * @brief 查询是否已确认

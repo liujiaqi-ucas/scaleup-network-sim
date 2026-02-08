@@ -130,6 +130,8 @@ int RdmaEgressQueue::GetNextQindex() {  // 从队列对里面选一个队列，�
             // 如果没数据了，检查是否彻底结束
             if (qp->IsFinishedConst()) {
                 m_qpGrp->SetQpFinished(curr);
+                // 【核心调用】这会直接触发 RdmaHw::DeleteQueuePair(qp)
+                 m_txQpFinishCb(qp);
             }
             continue;
         }
@@ -231,7 +233,7 @@ QbbNetDevice::QbbNetDevice() {
     // 假设 RTT 是 2.5us，RTO 设为 50us 比较稳妥
     m_rtoBase = MicroSeconds(50); 
     m_rtoValue = m_rtoBase;
-}
+
     NS_LOG_FUNCTION(this);
     m_ecn_source = new std::vector<ECNAccount>;
     for (uint32_t i = 0; i < qCnt; i++) {
@@ -278,6 +280,8 @@ QbbNetDevice::QbbNetDevice() {
     nakbitmap = 0;
     m_nackCooldown = MicroSeconds(200); // 默认 200 微秒冷却,这个是需要计算的参数
     m_lastNackTime = Seconds(0);
+    m_replayBuffer = Create<ReplayBuffer>(m_bufferSize);
+    m_rxBuffer = Create<RxBuffer>(m_bufferSize);
 }
 
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
@@ -306,7 +310,7 @@ void QbbNetDevice::TransmitComplete(void) {
 //********************************************************************************************/
 void QbbNetDevice::UpdateRtoTimer() {
     // 1. 如果窗口已经空了 (所有包都确认了)，取消定时器
-    if (m_txUna == m_txNext) {
+    if (m_txUna == m_next_seq_num) {
         if (m_rtoEvent.IsRunning()) {
             m_rtoEvent.Cancel();
         }
@@ -333,7 +337,7 @@ void QbbNetDevice::HandleRtoTimeout() {
 
     // 2. 指数退避 (Exponential Backoff)
     // 防止网络严重拥塞时，重传导致拥塞加剧。下次超时时间翻倍。
-    m_rtoValue = m_rtoValue * 2;
+    m_rtoValue += m_rtoValue;
     
     // 3. 立即尝试发送
     // 这一步很重要！必须去唤醒发送引擎消费刚才加入队列的包
@@ -362,14 +366,14 @@ void QbbNetDevice::ReleaseRxCredit(uint16_t flitsFreed) {
     Ptr<SwitchNode> swNode = DynamicCast<SwitchNode>(m_node);
     m_rxCumulativeFreed += flitsFreed;
     creditflag = true;  // 告诉device有新的credit要发送
-    if(m_node->GetNodeType() == 1){
-    std::cout<<"Node "<<m_node->GetId()<<"  device "<<m_ifIndex<<"执行了releaserxcredit函数，m_rxCumulativeFreed目前是"<<m_rxCumulativeFreed
-    <<"目前我的ingress还有"<<swNode->m_mmu->m_ingressQueues[m_ifIndex].size()<<"个flit等待转发"
-    <<std::endl;
-    }else{
-        std::cout<<"Node "<<m_node->GetId()<<"  device "<<m_ifIndex<<"执行了releaserxcredit函数，m_rxCumulativeFreed目前是"<<m_rxCumulativeFreed
-    <<std::endl;
-    }
+    // if(m_node->GetNodeType() == 1){
+    // std::cout<<"Node "<<m_node->GetId()<<"  device "<<m_ifIndex<<"执行了releaserxcredit函数，m_rxCumulativeFreed目前是"<<m_rxCumulativeFreed
+    // <<"目前我的ingress还有"<<swNode->m_mmu->m_ingressQueues[m_ifIndex].size()<<"个flit等待转发"
+    // <<std::endl;
+    // }else{
+    //     std::cout<<"Node "<<m_node->GetId()<<"  device "<<m_ifIndex<<"执行了releaserxcredit函数，m_rxCumulativeFreed目前是"<<m_rxCumulativeFreed
+    // <<std::endl;
+    // }
      if (m_txMachineState == READY) {
          std::cout<<"Node "<<m_node->GetId()<<" device  "<<m_ifIndex<<"因为有信用要释放要触发dequeue了"<<std::endl;
          DequeueAndTransmit();
@@ -485,29 +489,29 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     flitPayload->AddHeader(fh);
     //这里加上common头部了，就不算进去整体长度了，就当标签了
     CommonHeader co;
-    co.SetFlitType(0);//0表示数据flit
+    co.SetFlitType(FLIT_TYPE_DATA);//0表示数据flit
     flitPayload->AddHeader(co);//把common header加上去
+    // =========================================================
+    // 【关键新增】 搬运身份证 (Tag)
+    // =========================================================
+    FlowStatTag fst;
+    if (m_currentLargePacket->PeekPacketTag(fst)) {
+        // 复制 FlowStatTag (包含时间戳)
+        flitPayload->AddPacketTag(fst);
+    }
+    
+    FlowIDNUMTag fint;
+    if (m_currentLargePacket->PeekPacketTag(fint)) {
+        // 复制 FlowIDNUMTag (包含流 ID 和总大小)
+        flitPayload->AddPacketTag(fint);
+    }
     // =========================================================
     // 6. 【存入重传缓冲区】
     // =========================================================
-    // flitPayload 此时包含了 [FlitHeader | Slice of Original Packet]
-    // 必须 Copy，因为 TransmitStart 发送出去后，Packet 对象可能会被底层修改
     
-    // 存入重传缓冲区 (必须存 Copy)
-    // 这里的 fh.GetSeqNum() 就是刚才设置的 m_next_seq_num
-    // 1. 计算物理索引 (找坑位)
-   //    利用环形特性找到 m_txNext 对应的数组下标
-    int idx = m_next_seq_num % m_bufferSize;
+    
+    m_replayBuffer->AddNewPacket(m_next_seq_num,flitPayload);
 
-   // 2. 存入副本 (占坑)
-   //    注意：这里是智能指针赋值，只增加引用计数，不会发生内存拷贝
-   m_replayBuffer[idx].flit = flitPayload;
-
-   // 3. 初始化状态 (贴标签)
-   //    刚放进去的包，默认肯定没收到 ACK，也没在重传
-   m_replayBuffer[idx].isAcked = false;            // 状态：等待确认
-   m_replayBuffer[idx].isRetransmitting = false;   // 状态：不是重传任务
-   m_replayBuffer[idx].lastSentTime = Simulator::Now(); // 记录当前时间 (用于以后算 RTT)
    m_next_seq_num++;
 
     // =========================================================
@@ -623,14 +627,14 @@ void QbbNetDevice::DequeueAndTransmit(void) {
     if (m_node->GetNodeType() == 0) {
         //先检查有没有nak要发，nak是优先级最高的
          if(nakflag){
-            std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有nak要发了，nakseq是"<<nakseq<<"nakbitmap是"<<nakbitmap.to_ulong()<<std::endl;
+            std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有nak要发了，nakseq是"<<nakseq<<"nakbitmap是"<<nakbitmap<<std::endl;
             Ptr<Packet> p = Create<Packet>(0);
              NackHeader nh;
-            nh.SetSeq(nakseq);
+            nh.SetFirstMissing(nakseq);
             nh.SetBitmap(nakbitmap);
             p->AddHeader(nh);
             CommonHeader co;
-            co.SetFlitType(1);//1表示控制flit
+            co.SetFlitType(FLIT_TYPE_NACK);//1表示控制flit
             p->AddHeader(co);
             nakflag=false;
             TransmitStart(p);
@@ -658,7 +662,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         m_replayBuffer->SetRetransmitting(sn, false);
         
         // 跳过本次发送，或者递归调用 TrySend() 处理下一个
-        dequeueAndTransmit();
+        DequeueAndTransmit();
         return; 
     }
 
@@ -814,7 +818,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
             // 5. 封包
             p->AddHeader(fh);
             CommonHeader co;
-            co.SetFlitType(0);//0代表数据flit
+            co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
             p->AddHeader(co);
             // 6. 清除状态
             // 这个 ACK/NAK 已经随包发出了，任务完成
@@ -843,7 +847,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         fh.SetCredit(0, m_rxCumulativeFreed);
         p->AddHeader(fh);
         CommonHeader co;
-        co.SetFlitType(0);//0代表数据flit
+        co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
         p->AddHeader(co);
         creditflag = false;
         TransmitStart(p);
@@ -857,14 +861,14 @@ void QbbNetDevice::DequeueAndTransmit(void) {
     else {
         //第一优先级就是nak
         if(nakflag){
-            std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有nak要发了，nakseq是"<<nakseq<<"nakbitmap是"<<nakbitmap.to_ulong()<<std::endl;
+            std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有nak要发了，nakseq是"<<nakseq<<"nakbitmap是"<<nakbitmap<<std::endl;
             Ptr<Packet> p = Create<Packet>(0);
              NackHeader nh;
-            nh.SetSeq(nakseq);
+            nh.SetFirstMissing(nakseq);
             nh.SetBitmap(nakbitmap);
             p->AddHeader(nh);
             CommonHeader co;
-            co.SetFlitType(1);//1表示控制flit
+            co.SetFlitType(FLIT_TYPE_NACK);//1表示控制flit
             p->AddHeader(co);
             nakflag=false;
             TransmitStart(p);
@@ -889,7 +893,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         m_replayBuffer->SetRetransmitting(sn, false);
         
         // 跳过本次发送，或者递归调用 TrySend() 处理下一个
-        dequeandTransmit();
+        DequeueAndTransmit();
         return; 
     }
 
@@ -989,7 +993,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
             // 5. 封包
             p->AddHeader(fh);
             CommonHeader co;
-            co.SetFlitType(0);//0代表数据flit
+            co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
             p->AddHeader(co);
             // 6. 清除状态
             // 这个 ACK/NAK 已经随包发出了，任务完成
@@ -1018,7 +1022,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         fh.SetCredit(0, m_rxCumulativeFreed);
         p->AddHeader(fh);
         CommonHeader co;
-        co.SetFlitType(0);//0代表数据flit
+        co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
         p->AddHeader(co);
         creditflag = false;
         TransmitStart(p);
@@ -1077,7 +1081,7 @@ PROCESS_NEW_PACKET:
     // CommonHeader common;
     // p->RemoveHeader(common);
     CommonHeader common;
-    common.SetFlitType(0);//0代表数据flit
+    common.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
     FlitHeader fh;
     p->RemoveHeader(fh);           // 1. 取下旧头 (端侧的或上一跳的)
     fh.SetSeqNum(m_next_seq_num);  // 2. 更新为本端口的发送序号
@@ -1096,19 +1100,10 @@ PROCESS_NEW_PACKET:
     // 4.2 存入重传缓冲区 (必须存 Copy)
     // 这里的 fh.GetSeqNum() 就是刚才设置的 m_next_seq_num
     // 1. 计算物理索引 (找坑位)
-   //    利用环形特性找到 m_txNext 对应的数组下标
-    int idx = m_next_seq_num % m_bufferSize;
+   //    利用环形特性找到 m_next_seq_num 对应的数组下标
+    
+    m_replayBuffer->AddNewPacket(m_next_seq_num,p);
 
-   // 2. 存入副本 (占坑)
-   //    注意：这里是智能指针赋值，只增加引用计数，不会发生内存拷贝
-   m_replayBuffer[idx].flit = p->Copy();
-
-   // 3. 初始化状态 (贴标签)
-   //    刚放进去的包，默认肯定没收到 ACK，也没在重传
-   m_replayBuffer[idx].isAcked = false;            // 状态：等待确认
-   m_replayBuffer[idx].isRetransmitting = false;   // 状态：不是重传任务
-   m_replayBuffer[idx].lastSentTime = Simulator::Now(); // 记录当前时间 (用于以后算 RTT)
-   m_next_seq_num++;
     // 4.3 通知上层 (如果你的 SwitchNode 需要统计或处理)
      Ptr<SwitchNode> swNode = DynamicCast<SwitchNode>(m_node);
      if(swNode){
@@ -1119,9 +1114,7 @@ PROCESS_NEW_PACKET:
         
         //能走到这里的都是没有包可以发送的情况
     }
-    // =========================================================
-    // 最终决策：发送 (捎带 ACK) OR 兜底 (纯 ACK)
-    // =========================================================
+    
 
     
         
@@ -1146,10 +1139,10 @@ void QbbNetDevice::ProcessAck(uint16_t ackSn) {
 
     // 条件 B: 越界 ACK (确认了还没发的包)
     // 计算当前飞行中的窗口大小
-    int flightSize = (m_txNext - m_txUna + MAX_SN) % MAX_SN;
+    int flightSize = (m_next_seq_num - m_txUna + MAX_SN) % MAX_SN;
     if (dist > flightSize) {
         NS_LOG_ERROR("Received ACK for unsent data! AckSn:" << ackSn 
-                     << " TxNext:" << m_txNext);
+                     << " TxNext:" << m_next_seq_num);
         return; // 严重错误，直接返回
     }
 
@@ -1216,11 +1209,11 @@ void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
         // 3. 检查冷却时间 (Cool-down / RTT Check)
         //    防止刚发出去的包因为 NACK 风暴被重复加队
         Time lastSent = m_replayBuffer->GetLastSentTime(firstMissing);
-        bool isCoolingDown = (Simulator::Now() - lastSent) < m_rttEstimate;
+        bool isCoolingDown = (Simulator::Now() - lastSent) < NanoSeconds(m_rttEstimate);
 
         if (!alreadyAcked && !alreadyQueued && !isCoolingDown) {
             // ---> 加入高优先级队列
-            m_retransQueue.push(firstMissing);
+            m_retransQueue.push_back(firstMissing);
             // ---> 上锁，标记为正在处理
             m_replayBuffer->SetRetransmitting(firstMissing, true);
             
@@ -1238,9 +1231,9 @@ void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
         uint16_t targetSn = firstMissing + 1 + i; // 自然回绕 (uint16_t)
 
         // 【关键边界检查】
-        // 如果 targetSn 碰到了 m_txNext，说明这个包我还没发呢！
+        // 如果 targetSn 碰到了 m_next_seq_num，说明这个包我还没发呢！
         // 接收端填 0 是因为它当然没收到。直接退出循环。
-        if (targetSn == m_txNext) {
+        if (targetSn == m_next_seq_num) {
             break; 
         }
 
@@ -1262,11 +1255,11 @@ void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
             
             Time lastSent = m_replayBuffer->GetLastSentTime(targetSn);//冷却限制
             // 如果刚发出去不到 1 个 RTT，那这个 0 很正常（还在路上）
-            bool isCoolingDown = (Simulator::Now() - lastSent) < m_rttEstimate;
+            bool isCoolingDown = (Simulator::Now() - lastSent) < NanoSeconds(m_rttEstimate);
 
             if (!isAcked && !isQueued && !isCoolingDown) {
                 // ---> 确认为丢失，加入队列
-                m_retransQueue.push(targetSn);
+                m_retransQueue.push_back(targetSn);
                 m_replayBuffer->SetRetransmitting(targetSn, true);
                 
                 NS_LOG_INFO("Retransmit Bitmap item: " << targetSn);
@@ -1298,8 +1291,8 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     }
     CommonHeader co;
     packet->RemoveHeader(co);
-    int type=co.GetFlitType();
-    if(type==1){//代表这是一个nak的flit
+    int cotype=co.GetFlitType();
+    if(cotype==1){//代表这是一个nak的flit
         NackHeader nak;
         packet->PeekHeader(nak);
         uint16_t firstMissing=nak.GetFirstMissing();
@@ -1406,7 +1399,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
             // 或者这只是告诉交换机 "Port X 有新数据了"
             packet->AddPacketTag(FlowIdTag(m_ifIndex));
             CustomHeader dummyCh; 
-            m_node->SwitchReceiveFromDevice(this, packet, dummyCh);
+            m_node->SwitchReceiveFromDevice(this, packet, dummyCh);//这里可能得检查一下会不会卡死回不来
 
             // (3) 发送 ACK (告诉上游我收齐到了哪里)
             TriggerAck(0, m_rxNext);
@@ -1463,9 +1456,9 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
                 TriggerAck(0, m_rxNext);
                 
                 // 批量释放 Credit (因为我们刚刚 ClearEntry 了 commitCount 个包)
-                // 假设 SendCredit(n) 或者循环调用
+                // 
                 
-                    SendCredit(commitCount); // 替换为你实际的发送 Credit 函数
+                    ReleaseRxCredit(commitCount); // 替换为你实际的发送 Credit 函数
                 
             }
 

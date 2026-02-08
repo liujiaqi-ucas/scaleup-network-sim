@@ -12,14 +12,18 @@ namespace ns3 {
  * 2. 维护本地接收状态 (Local Bitmap)
  * 3. 生成用于发送 NACK 的压缩位图
  */
-class RxBuffer {
+class RxBuffer : public SimpleRefCount<RxBuffer> {
 public:
     /**
      * @param size 缓冲区大小 (例如 128)
      */
     RxBuffer(uint16_t size);
     ~RxBuffer();
-
+    // ... 其他函数 ...
+    uint16_t GetCount() const; // 返回当前缓存的包数量
+    bool IsEmpty() const;      // 返回是否为空
+    // ... 其他成员 ...
+    uint16_t m_count = 0;      // 实时计数器
     // ============ 核心操作 ============
 
     /**

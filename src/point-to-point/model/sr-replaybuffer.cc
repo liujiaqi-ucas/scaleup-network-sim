@@ -1,6 +1,6 @@
-#include "replay-buffer.h"
+#include "sr-replaybuffer.h"
 #include "ns3/log.h"
-// 记得 include 你的 flit 定义，例如 #include "flit.h"
+
 
 namespace ns3 {
 
@@ -27,7 +27,7 @@ ReplayBuffer::GetIndex(uint16_t sn) const
 }
 
 void 
-ReplayBuffer::AddNewPacket(uint16_t sn, Ptr<Flit> flit) 
+ReplayBuffer::AddNewPacket(uint16_t sn, Ptr<Packet> flit) 
 {
     uint16_t idx = GetIndex(sn);
 
@@ -91,7 +91,7 @@ ReplayBuffer::FreeSlots(uint16_t oldUna, uint16_t newTxUna)
     }
 }
 
-Ptr<Flit> 
+Ptr<Packet> 
 ReplayBuffer::GetFlit(uint16_t sn) 
 {
     uint16_t idx = GetIndex(sn);

@@ -83,4 +83,3 @@ private:
 
 } // namespace ns3
 
-#endif /* FLIT_HEADER_H */

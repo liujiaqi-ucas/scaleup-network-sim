@@ -1,77 +1,54 @@
-import sys
 import argparse
 import os
 
 def generate_file(filename, flows):
-    """辅助函数：将生成的流列表写入文件"""
-    # 确保输出目录存在
-    output_dir = os.path.dirname(filename)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    with open(filename, "w") as f:
-        # 第一行写总流数 (这是 C++ 代码 flowf >> flow_num 读取的)
+    """将生成的流列表写入文件"""
+    if not os.path.exists("config"):
+        os.makedirs("config")
+    path = os.path.join("config", filename)
+    with open(path, "w") as f:
+        # 第一行必须是总流数，对应 C++ 中的 flowf >> flow_num
         f.write(f"{len(flows)}\n")
         for flow in flows:
             f.write(f"{flow}\n")
-    print(f"[Success] Generated {filename} with {len(flows)} flows.")
+    print(f"[Success] Generated {path} with {len(flows)} flows.")
 
-def gen_all_to_all(num_gpus, total_size_bytes, output_path):
-    """生成 All-to-All 流量"""
+def gen_all_to_all(num_gpus, total_size_bytes):
+    """生成 All-to-All 流量 (MoE 场景)"""
     flows = []
     chunk_size = total_size_bytes // num_gpus
-    if chunk_size < 1: chunk_size = 1
+    step_id = 0  # All-to-All 是所有流并发，因此全部属于 Step 0
     
-    step_id = 0
     for src in range(num_gpus):
         for dst in range(num_gpus):
             if src == dst: continue
             # 格式: src dst pg(3) size step_id
-            line = f"{src} {dst} 3 {chunk_size} {step_id}"
-            flows.append(line)
-            
-    generate_file(output_path, flows)
+            flows.append(f"{src} {dst} 3 {chunk_size} {step_id}")
+    generate_file("flow_alltoall.txt", flows)
 
-def gen_all_reduce_ring(num_gpus, total_size_bytes, output_path):
-    """生成 Ring All-Reduce 流量"""
+def gen_all_reduce_ring(num_gpus, total_size_bytes):
+    """生成 Ring All-Reduce 流量 (梯度同步场景)"""
     flows = []
     chunk_size = total_size_bytes // num_gpus
-    if chunk_size < 1: chunk_size = 1
-    
+    # Ring 算法总步骤数为 2 * (N-1)
     total_steps = 2 * (num_gpus - 1)
     
     for step_id in range(total_steps):
         for src in range(num_gpus):
+            # 环形拓扑：每个 GPU 发给它的下一个邻居
             dst = (src + 1) % num_gpus
-            # 格式: src dst pg(3) size step_id
-            line = f"{src} {dst} 3 {chunk_size} {step_id}"
-            flows.append(line)
-            
-    generate_file(output_path, flows)
+            # 这里的 step_id 将作为控制 Barrier 的红绿灯
+            flows.append(f"{src} {dst} 3 {chunk_size} {step_id}")
+    generate_file("flow_allreduce.txt", flows)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate Scale-up traffic traces (All-Reduce / All-to-All)")
-    
-    # 添加命令行参数
-    parser.add_argument('-n', '--ngpus', type=int, default=8, help="Number of GPUs (default: 8)")
-    parser.add_argument('-s', '--size', type=int, default=128, help="Total data size in MB (default: 128)")
-    parser.add_argument('-o', '--outdir', type=str, default="config", help="Output directory (default: config)")
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-n', '--ngpus', type=int, default=8, help="GPU 数量")
+    parser.add_argument('-s', '--size', type=int, default=64, help="总数据量 (MB)")
     args = parser.parse_args()
 
-    # 参数转换
-    NUM_GPUS = args.ngpus
-    TOTAL_DATA = args.size * 1024 * 1024 # 转换为字节
-    OUT_DIR = args.outdir
+    total_bytes = args.size * 1024 * 1024
+    print(f"Generating for {args.ngpus} GPUs, Total Size: {args.size} MB")
     
-    print(f"Generating traffic for {NUM_GPUS} GPUs, Total Data: {args.size} MB")
-    
-    # 自动加上路径前缀
-    file_a2a = os.path.join(OUT_DIR, "flow_alltoall.txt")
-    file_ar = os.path.join(OUT_DIR, "flow_allreduce.txt")
-    
-    # 1. 生成 All-to-All
-    gen_all_to_all(NUM_GPUS, TOTAL_DATA, file_a2a)
-    
-    # 2. 生成 All-Reduce
-    gen_all_reduce_ring(NUM_GPUS, TOTAL_DATA, file_ar)
+    gen_all_to_all(args.ngpus, total_bytes)
+    gen_all_reduce_ring(args.ngpus, total_bytes)

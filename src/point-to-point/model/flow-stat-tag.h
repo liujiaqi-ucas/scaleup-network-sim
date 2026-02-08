@@ -4,7 +4,8 @@
  */
 
 #include "ns3/tag.h"
-
+#ifndef FLOW_STAT_TAG_H
+#define FLOW_STAT_TAG_H
 namespace ns3 {
 /**
  * \ingroup tlt
@@ -21,7 +22,11 @@ class FlowStatTag : public Tag {
     virtual void Deserialize(TagBuffer i);
     void SetType(uint8_t ttl);
     uint8_t GetType();
-
+    // ==========================================
+    // 【新增】专门用于记录流开始时间 (QP Start Time)
+    // ==========================================
+    void setFlowStartTime(double t);
+    double getFlowStartTime();
     enum FlowEnd_t {
         FLOW_END = 0x01,
         FLOW_NOTEND = 0x00,
@@ -35,6 +40,9 @@ class FlowStatTag : public Tag {
    private:
     uint8_t flow_stat;
     double initiatedTime;
+    // 【新增】
+    double flowStartTime;
 };
 
 }  // namespace ns3
+#endif

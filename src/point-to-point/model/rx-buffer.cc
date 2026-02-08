@@ -31,7 +31,7 @@ void RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p) {
     if (m_isReceived[idx]) {
         NS_LOG_WARN("Overwriting existing packet at SN " << sn);
     }
-
+    m_count++;
     m_buffer[idx] = p;
     m_isReceived[idx] = true; // 【点灯】：标记为收到
 }
@@ -40,12 +40,14 @@ Ptr<Packet> RxBuffer::GetPacket(uint16_t sn) {
     uint16_t idx = GetIndex(sn);
     return m_buffer[idx];
 }
-
+uint16_t RxBuffer::GetCount() const { return m_count; }
+bool RxBuffer::IsEmpty() const { return m_count == 0; }
 void RxBuffer::ClearEntry(uint16_t sn) {
     uint16_t idx = GetIndex(sn);
     
     m_buffer[idx] = nullptr;   // 释放 Packet 引用
     m_isReceived[idx] = false; // 【灭灯】：标记为空，供下一圈复用
+    m_count--;
 }
 
 bool RxBuffer::IsReceived(uint16_t sn) const {
