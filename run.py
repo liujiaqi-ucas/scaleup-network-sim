@@ -217,31 +217,46 @@ def main():
         n_host = int(line[0]) - int(line[1])
 
     assert (hostload >= 0 and hostload < 100)
-    flow = "L_{load:.2f}_CDF_{cdf}_N_{n_host}_T_{time}ms_B_{bw}_flow".format(
-        load=hostload, cdf=args.cdf, n_host=n_host, time=int(float(args.simul_time)*1000), bw=bw)
+    # flow = "L_{load:.2f}_CDF_{cdf}_N_{n_host}_T_{time}ms_B_{bw}_flow".format(
+    #     load=hostload, cdf=args.cdf, n_host=n_host, time=int(float(args.simul_time)*1000), bw=bw)
 
-    # check the file exists
-    if (exists(os.getcwd() + "/config/" + flow + ".txt")):
-        print("Input traffic file with load:{load:.2f}, cdf:{cdf}, n_host:{n_host} already exists".format(
-            load=hostload, cdf=cdf, n_host=n_host))
-    else:  # make the input traffic file
-        print("Generate a input traffic file...")
-        print("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
-            cdf=os.getcwd() + "/../traffic_gen/" + args.cdf + ".txt",
-            n_host=n_host,
-            load=hostload / 100.0,
-            bw=args.bw + "G",
-            time=args.simul_time,
-            output=os.getcwd() + "/config/" + flow + ".txt"))
+    # # check the file exists
+    # if (exists(os.getcwd() + "/config/" + flow + ".txt")):
+    #     print("Input traffic file with load:{load:.2f}, cdf:{cdf}, n_host:{n_host} already exists".format(
+    #         load=hostload, cdf=cdf, n_host=n_host))
+    # else:  # make the input traffic file
+    #     print("Generate a input traffic file...")
+    #     print("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
+    #         cdf=os.getcwd() + "/../traffic_gen/" + args.cdf + ".txt",
+    #         n_host=n_host,
+    #         load=hostload / 100.0,
+    #         bw=args.bw + "G",
+    #         time=args.simul_time,
+    #         output=os.getcwd() + "/config/" + flow + ".txt"))
 
-        os.system("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
-            cdf=os.getcwd() + "/traffic_gen/" + args.cdf + ".txt",
-            n_host=n_host,
-            load=hostload / 100.0,
-            bw=args.bw + "G",
-            time=args.simul_time,
-            output=os.getcwd() + "/config/" + flow + ".txt"))
+    #     os.system("python ./traffic_gen/traffic_gen.py -c {cdf} -n {n_host} -l {load} -b {bw} -t {time} -o {output}".format(
+    #         cdf=os.getcwd() + "/traffic_gen/" + args.cdf + ".txt",
+    #         n_host=n_host,
+    #         load=hostload / 100.0,
+    #         bw=args.bw + "G",
+    #         time=args.simul_time,
+    #         output=os.getcwd() + "/config/" + flow + ".txt"))
 
+
+    # --- [修改 ] 强制使用手动生成的 Scale-up 流量文件 ---
+    # 这里填写你在 gen_scaleup_traffic.py 里生成的文件名（不带 .txt）
+    # 如果你想跑 All-to-All，就改成 flow_alltoall
+    target_flow_name = "flow_allreduce"
+    
+    flow = target_flow_name
+    flow_file_path = os.getcwd() + "/config/" + flow + ".txt"
+
+    if not exists(flow_file_path):
+        raise Exception(f"Error: 流量文件 {flow_file_path} 不存在！\n"
+                        f"请先运行 'python3 gen_scaleup_traffic.py' 生成它。")
+    
+    print(f"--> [Scale-up Mode] 使用流量文件: {flow}.txt")
+    # ----------------------------------------------------
     # sanity check - bandwidth
     with open("config/{topo}.txt".format(topo=args.topo), 'r') as f_topo:
         first_line = f_topo.readline().split(" ")
@@ -413,12 +428,24 @@ def main():
     fct_analysistime_limit_end = int(
         flowgen_stop_time * 1e9) + int(0.05 * 1e9)  # extra term
 
-    print("Analyzing output FCT...")
-    print("python3 fctAnalysis.py -id {config_ID} -dir {dir} -bdp {bdp} -sT {fct_analysis_time_limit_begin} -fT {fct_analysistime_limit_end} > /dev/null 2>&1".format(
-        config_ID=config_ID, dir=os.getcwd(), bdp=bdp, fct_analysis_time_limit_begin=fct_analysis_time_limit_begin, fct_analysistime_limit_end=fct_analysistime_limit_end))
-    os.system("python3 fctAnalysis.py -id {config_ID} -dir {dir} -bdp {bdp} -sT {fct_analysis_time_limit_begin} -fT {fct_analysistime_limit_end} > /dev/null 2>&1".format(
-        config_ID=config_ID, dir=os.getcwd(), bdp=bdp, fct_analysis_time_limit_begin=fct_analysis_time_limit_begin, fct_analysistime_limit_end=fct_analysistime_limit_end))
+    # print("Analyzing output FCT...")
+    # print("python3 fctAnalysis.py -id {config_ID} -dir {dir} -bdp {bdp} -sT {fct_analysis_time_limit_begin} -fT {fct_analysistime_limit_end} > /dev/null 2>&1".format(
+    #     config_ID=config_ID, dir=os.getcwd(), bdp=bdp, fct_analysis_time_limit_begin=fct_analysis_time_limit_begin, fct_analysistime_limit_end=fct_analysistime_limit_end))
+    # os.system("python3 fctAnalysis.py -id {config_ID} -dir {dir} -bdp {bdp} -sT {fct_analysis_time_limit_begin} -fT {fct_analysistime_limit_end} > /dev/null 2>&1".format(
+    #     config_ID=config_ID, dir=os.getcwd(), bdp=bdp, fct_analysis_time_limit_begin=fct_analysis_time_limit_begin, fct_analysistime_limit_end=fct_analysistime_limit_end))
+    
 
+    # -----------------------------------------------------------
+    # [修改] 调用专门为 Scale-up 设计的分析脚本
+    # -----------------------------------------------------------
+    print(f"\n[Analysis] Running Scale-up Analysis for Config ID: {config_ID} ...")
+    
+    # 直接调用新脚本，传入 ID 即可
+    # 注意：确保 analyze_scaleup.py 在当前目录下
+    analyze_cmd = "python3 analyze_scaleup.py -id {config_ID} -fdir mix".format(config_ID=config_ID)
+    
+    os.system(analyze_cmd)
+    # -----------------------------------------------------------
     if lb_mode == 9: # ConWeave Logging
         ################################################################
         #             Analyze hardware resource of ConWeave            #

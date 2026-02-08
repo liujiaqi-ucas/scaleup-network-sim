@@ -316,6 +316,13 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
                exit(1);
 
     }
+    //更新一下流的id
+    if (rxQp->m_flow_id < 0) {
+        FlowIDNUMTag fit;
+        if (p->PeekPacketTag(fit)) {
+            rxQp->m_flow_id = fit.GetId();
+        }
+    }
     std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
     rxQp->expected_seq+=fh.GetPktTotalBytes(); // 更新期望的下一个序号
         // 把 FlitHeader 加回去，保持包的完整性 (如果后续还需要处理)

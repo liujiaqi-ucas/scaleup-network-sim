@@ -184,113 +184,177 @@ std::unordered_map<uint32_t, uint16_t> dportNumber;
 uint16_t *port_per_host;
 
 // Scheduling input flows from flow.txt
-struct FlowInput {
-    uint32_t src, dst, pg, maxPacketCount, port;
-    double start_time;
-    uint32_t idx;
+// struct FlowInput {
+//     uint32_t src, dst, pg, maxPacketCount, port;
+//     double start_time;
+//     uint32_t idx;
+// };
+// FlowInput flow_input = {0};  // global variable
+ uint32_t flow_num;
+// --- [新增] Scale-up 动态任务管理结构 ---
+struct StepTask {
+    uint32_t src, dst, pg, size;
 };
-FlowInput flow_input = {0};  // global variable
-uint32_t flow_num;
+
+std::map<uint32_t, std::vector<StepTask>> step_manager;   // 存储每个 Step 的流列表
+std::map<uint32_t, uint32_t> step_total_flows;           // 每个 Step 预期的流数量
+std::map<uint32_t, uint32_t> step_finished_count;        // 每个 Step 实际完成的流数量
+
+uint32_t current_active_step = 0;                        // 当前正在跑第几步
+uint32_t max_step_id = 0;                                // 流量文件中最大的 Step ID
+
 
 /**
  * Read flow input from file "flowf"
  */
-void ReadFlowInput() {
-    if (flow_input.idx < flow_num) {
-        flowf >> flow_input.src >> flow_input.dst >> flow_input.pg >> flow_input.maxPacketCount >>
-            flow_input.start_time;
-        assert(n.Get(flow_input.src)->GetNodeType() == 0 &&
-               n.Get(flow_input.dst)->GetNodeType() == 0);
-    } else {
-        std::cout << "*** input flow is over the prefixed number -- flow number : " << flow_num
-                  << std::endl;
-        std::cout << "*** flow_input.idx : " << flow_input.idx << std::endl;
-        std::cout << "*** THIS IS THE LAST FLOW TO SEND :) " << std::endl;
+// void ReadFlowInput() {
+//     if (flow_input.idx < flow_num) {
+//         flowf >> flow_input.src >> flow_input.dst >> flow_input.pg >> flow_input.maxPacketCount >>
+//             flow_input.start_time;
+//         assert(n.Get(flow_input.src)->GetNodeType() == 0 &&
+//                n.Get(flow_input.dst)->GetNodeType() == 0);
+//     } else {
+//         std::cout << "*** input flow is over the prefixed number -- flow number : " << flow_num
+//                   << std::endl;
+//         std::cout << "*** flow_input.idx : " << flow_input.idx << std::endl;
+//         std::cout << "*** THIS IS THE LAST FLOW TO SEND :) " << std::endl;
+//     }
+// }
+//****************************************************** */
+void PreloadCollectiveFlows() {
+    if (!flowf.is_open()) {
+        std::cerr << "Error: Flow file not open!" << std::endl;
+        exit(1);
+    }
+    
+    // flow_num 已经在 main 函数开头读取过了
+    std::cout << "[Init] Preloading " << flow_num << " flows..." << std::endl;
+
+    for (uint32_t i = 0; i < flow_num; ++i) {
+        uint32_t src, dst, pg, size;
+        double stepId_raw; // 文件最后一列可能是浮点数格式，先读出来
+        
+        // 读取一行：src dst pg size step_id
+        flowf >> src >> dst >> pg >> size >> stepId_raw;
+
+        uint32_t sId = (uint32_t)stepId_raw; // 转为整数 Step ID
+
+        // 存入管理器
+        step_manager[sId].push_back({src, dst, pg, size});
+        step_total_flows[sId]++;
+        
+        // 更新最大步数
+        if (sId > max_step_id) max_step_id = sId;
+    }
+    std::cout << "[Init] Logic mapped into " << max_step_id + 1 << " Steps." << std::endl;
+    flowf.close();
+}
+void ExecuteStep(uint32_t stepId) {
+    if (step_manager.find(stepId) == step_manager.end()) return;
+
+    current_active_step = stepId;
+    std::cout << "[Scale-up] Starting Step " << stepId << " at " << Simulator::Now().GetMicroSeconds() << " us" << std::endl;
+
+    for (auto &task : step_manager[stepId]) {
+        uint32_t sport = portNumber[task.src]++;
+        uint32_t dport = dportNumber[task.dst]++;
+
+        // 使用你原本 main 中的参数逻辑
+        RdmaClientHelper clientHelper(
+            task.pg, serverAddress[task.src], serverAddress[task.dst], sport, dport, task.size,
+            has_win ? (global_t == 1 ? maxBdp : pairBdp[n.Get(task.src)][n.Get(task.dst)]) : 0,
+            global_t == 1 ? maxRtt : pairRtt[n.Get(task.src)][n.Get(task.dst)]);
+        
+        // 【关键】必须把 stepId 存进 StatFlowID，否则接收端不知道这是哪一步结束了
+        clientHelper.SetAttribute("StatFlowID", IntegerValue(stepId));
+
+        ApplicationContainer appCon = clientHelper.Install(n.Get(task.src));
+        appCon.Start(Seconds(0)); 
     }
 }
-
+//******************************************************** */
 /**
  * Scheduling flows given in /config/L_XX....txt file
  */
-void ScheduleFlowInputs(FILE *infile) {
-    NS_LOG_DEBUG("ScheduleFlowInputs at " << Simulator::Now());
-    while (flow_input.idx < flow_num && Seconds(flow_input.start_time) == Simulator::Now()) {
-        uint32_t pg, src, dst, sport, dport, maxPacketCount, target_len;
-        pg = flow_input.pg;
-        src = flow_input.src;
-        dst = flow_input.dst;
+// void ScheduleFlowInputs(FILE *infile) {
+//     NS_LOG_DEBUG("ScheduleFlowInputs at " << Simulator::Now());
+//     while (flow_input.idx < flow_num && Seconds(flow_input.start_time) == Simulator::Now()) {
+//         uint32_t pg, src, dst, sport, dport, maxPacketCount, target_len;
+//         pg = flow_input.pg;
+//         src = flow_input.src;
+//         dst = flow_input.dst;
 
-        // src port
-        sport = portNumber[src];  // get a new port number
-        portNumber[src] = portNumber[src] + 1;
+//         // src port
+//         sport = portNumber[src];  // get a new port number
+//         portNumber[src] = portNumber[src] + 1;
 
-        // dst port
-        dport = dportNumber[dst];
-        dportNumber[dst] = dportNumber[dst] + 1;
+//         // dst port
+//         dport = dportNumber[dst];
+//         dportNumber[dst] = dportNumber[dst] + 1;
 
-        target_len = flow_input.maxPacketCount;  // this is actually not packet-count, but bytes
-        if (target_len == 0) {
-            target_len = 1;
-        }
-        assert(n.Get(src)->GetNodeType() == 0 && n.Get(dst)->GetNodeType() == 0);
+//         target_len = flow_input.maxPacketCount;  // this is actually not packet-count, but bytes
+//         if (target_len == 0) {
+//             target_len = 1;
+//         }
+//         assert(n.Get(src)->GetNodeType() == 0 && n.Get(dst)->GetNodeType() == 0);
 
-        /**
-         * Turn on if you want to record all input streams into output file for logging.
-         * But, the input stream can be found in config. We do not recommend to do this
-         * as it consumes storage resource, redundantly.
-         */
-        if (0) {  // logging input streams to "XXXX_out_in.txt"
-            /************************
-             * record flow's 4-tuple
-             ************************/
-            fprintf(infile, "%u %u %u %u %u %lu\n", src, dst, sport, dport, target_len,
-                    (uint64_t)(flow_input.start_time * (uint64_t)1000000000));
-            fflush(infile);
+//         /**
+//          * Turn on if you want to record all input streams into output file for logging.
+//          * But, the input stream can be found in config. We do not recommend to do this
+//          * as it consumes storage resource, redundantly.
+//          */
+//         if (0) {  // logging input streams to "XXXX_out_in.txt"
+//             /************************
+//              * record flow's 4-tuple
+//              ************************/
+//             fprintf(infile, "%u %u %u %u %u %lu\n", src, dst, sport, dport, target_len,
+//                     (uint64_t)(flow_input.start_time * (uint64_t)1000000000));
+//             fflush(infile);
 
-            /***********    FCT Tracking    **************/
-            UdpServerHelper server0(dport);
-            server0.SetAttribute("FlowSize", UintegerValue(target_len));
-            server0.SetAttribute("irn", BooleanValue(enable_irn));
-            server0.SetAttribute("StatHostSrc", UintegerValue(src));
-            server0.SetAttribute("StatHostDst", UintegerValue(dst));
-            server0.SetAttribute("StatRxLen", UintegerValue(target_len));
-            server0.SetAttribute("StatFlowID", UintegerValue(flow_input.idx));
-            server0.SetAttribute("Port", UintegerValue(dport));
+//             /***********    FCT Tracking    **************/
+//             UdpServerHelper server0(dport);
+//             server0.SetAttribute("FlowSize", UintegerValue(target_len));
+//             server0.SetAttribute("irn", BooleanValue(enable_irn));
+//             server0.SetAttribute("StatHostSrc", UintegerValue(src));
+//             server0.SetAttribute("StatHostDst", UintegerValue(dst));
+//             server0.SetAttribute("StatRxLen", UintegerValue(target_len));
+//             server0.SetAttribute("StatFlowID", UintegerValue(flow_input.idx));
+//             server0.SetAttribute("Port", UintegerValue(dport));
 
-            ApplicationContainer apps0s = server0.Install(n.Get(dst));  // DST
-            apps0s.Start(Seconds(Time(0)));
-            apps0s.Stop(Seconds(100.0));
-        }  // end of logging input streams
+//             ApplicationContainer apps0s = server0.Install(n.Get(dst));  // DST
+//             apps0s.Start(Seconds(Time(0)));
+//             apps0s.Stop(Seconds(100.0));
+//         }  // end of logging input streams
 
-        if (pairRtt.find(n.Get(src)) == pairRtt.end() ||
-            pairRtt[n.Get(src)].find(n.Get(dst)) == pairRtt[n.Get(src)].end()) {
-            std::cerr << "pairRtt src: " << src << " -> dst: " << dst
-                      << " ==> cannot be found from database" << std::endl;
-            assert(false);
-        }
+//         if (pairRtt.find(n.Get(src)) == pairRtt.end() ||
+//             pairRtt[n.Get(src)].find(n.Get(dst)) == pairRtt[n.Get(src)].end()) {
+//             std::cerr << "pairRtt src: " << src << " -> dst: " << dst
+//                       << " ==> cannot be found from database" << std::endl;
+//             assert(false);
+//         }
 
-        RdmaClientHelper clientHelper(
-            pg, serverAddress[src], serverAddress[dst], sport, dport, target_len,
-            has_win ? (global_t == 1 ? maxBdp : pairBdp[n.Get(src)][n.Get(dst)]) : 0,
-            global_t == 1 ? maxRtt : pairRtt[n.Get(src)][n.Get(dst)]);
-        clientHelper.SetAttribute("StatFlowID", IntegerValue(flow_input.idx));
+//         RdmaClientHelper clientHelper(
+//             pg, serverAddress[src], serverAddress[dst], sport, dport, target_len,
+//             has_win ? (global_t == 1 ? maxBdp : pairBdp[n.Get(src)][n.Get(dst)]) : 0,
+//             global_t == 1 ? maxRtt : pairRtt[n.Get(src)][n.Get(dst)]);
+//         clientHelper.SetAttribute("StatFlowID", IntegerValue(flow_input.idx));
 
-        ApplicationContainer appCon = clientHelper.Install(n.Get(src));  // SRC
-        appCon.Start(Seconds(Time(0)));
-        appCon.Stop(Seconds(100.0));
+//         ApplicationContainer appCon = clientHelper.Install(n.Get(src));  // SRC
+//         appCon.Start(Seconds(Time(0)));
+//         appCon.Stop(Seconds(100.0));
 
-        flow_input.idx++;
-        ReadFlowInput();
-    }
+//         flow_input.idx++;
+//         ReadFlowInput();
+//     }
 
-    // schedule the next time to run this function
-    if (flow_input.idx < flow_num) {
-        Simulator::Schedule(Seconds(flow_input.start_time) - Simulator::Now(), &ScheduleFlowInputs,
-                            infile);
-    } else {  // no more flows, close the file
-        flowf.close();
-    }
-}
+//     // schedule the next time to run this function
+//     if (flow_input.idx < flow_num) {
+//         Simulator::Schedule(Seconds(flow_input.start_time) - Simulator::Now(), &ScheduleFlowInputs,
+//                             infile);
+//     } else {  // no more flows, close the file
+//         flowf.close();
+//     }
+// }
 
 /**
  * @brief CNP frequency monitoring (timestamp nodeId ECN OoO Total)
@@ -497,6 +561,7 @@ void conweave_history_print() {
 // 这个函数替代原来的 qp_finish
 void rx_flow_finish(FILE *fout, Ptr<RdmaRxQueuePair> rxQp, double startTime) {
     // 1. 获取基本信息
+    uint32_t sId = (uint32_t)rxQp->m_flow_id;
     uint32_t srcId = Settings::ip_to_node_id(Ipv4Address(rxQp->sip));
     uint32_t dstId = Settings::ip_to_node_id(Ipv4Address(rxQp->dip));
     
@@ -510,13 +575,13 @@ void rx_flow_finish(FILE *fout, Ptr<RdmaRxQueuePair> rxQp, double startTime) {
     // 格式保持和你原来的一致: src dst sport dport size start fct standalone_fct
     // 注意：rxQp->m_size 必须是你之前逻辑里正确赋值过的
     if (fout) {
-        fprintf(fout, "%u %u %u %u %lu %lu %lu %lu\n",
+        fprintf(fout, "%u %u %u %u %lu %lu %lu %u\n",
                 srcId, dstId, 
                 rxQp->sport, rxQp->dport, 
                 rxQp->m_size, 
                 startTs, 
                 fct, 
-                fct); // standalone_fct 暂时用 fct 代替，或者你需要另外计算
+                sId); // standalone_fct 暂时用 fct 代替，或者你需要另外计算
         fflush(fout);
     }
 
@@ -526,6 +591,21 @@ void rx_flow_finish(FILE *fout, Ptr<RdmaRxQueuePair> rxQp, double startTime) {
     // 5. 打印日志方便调试
     std::cout << ">>> Flow Finished: " << srcId << "->" << dstId 
               << " FCT: " << fct << " ns" << std::endl;
+              // --- [新增：动态推进逻辑] ---
+    //uint32_t sId = (uint32_t)rxQp->m_statFlowID; 
+    step_finished_count[sId]++;
+// 检查：这一步的所有流都到齐了吗？
+    if (step_finished_count[sId] == step_total_flows[sId]) {
+        std::cout << "=== [Barrier] Step " << sId << " COMPLETED. (" 
+                  << step_total_flows[sId] << " flows) ===" << std::endl;
+
+        if (sId < max_step_id) {
+            // 如果还有下一步，模拟 2us 的 GPU 计算延迟，然后踢出下一脚
+            Simulator::Schedule(NanoSeconds(2000), &ExecuteStep, sId + 1);
+        } else {
+            std::cout << "###### ALL SCALE-UP STEPS FINISHED ######" << std::endl;
+        }
+    }
 }
 /**
  * @brief PFC event logging
@@ -1865,12 +1945,23 @@ std::cout<<"333333333"<<std::endl;
         }
     }
 
-    flow_input.idx = 0;
+    // flow_input.idx = 0;
+    // port_per_host = new uint16_t[node_num - switch_num];
+    // if (flow_num > 0) {
+    //     // generate flows
+    //     ReadFlowInput();
+    //     Simulator::Schedule(Seconds(0), &ScheduleFlowInputs, flow_input_stream);
+    // }
+    // 分配端口数组内存（保持不变）
     port_per_host = new uint16_t[node_num - switch_num];
+
     if (flow_num > 0) {
-        // generate flows
-        ReadFlowInput();
-        Simulator::Schedule(Seconds(0), &ScheduleFlowInputs, flow_input_stream);
+        // 1. 加载所有任务到 step_manager
+        PreloadCollectiveFlows();
+        
+        // 2. 设置第一脚 (Step 0) 的触发时间
+        // flowgen_start_time 通常是 2.0s，给网络一点预热时间
+        Simulator::Schedule(Seconds(flowgen_start_time), &ExecuteStep, 0);
     }
 
     topof.close();
