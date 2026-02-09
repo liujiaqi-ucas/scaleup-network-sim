@@ -337,7 +337,7 @@ bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> pack
                                          CustomHeader &ch) {
     
     uint32_t inDev = device->GetIfIndex();
-    std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的input函数了"<<std::endl;
+    std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的ArbitrateAndSend函数了"<<std::endl;
     m_mmu->ArbitrateAndSend(inDev);//这里直接调用转发函数就行了，尝试一下进行转发
     return true;
 }

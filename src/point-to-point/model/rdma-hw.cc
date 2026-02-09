@@ -343,9 +343,11 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
     // 尝试从 Tag 中恢复流的总大小 (rxQp->m_size) 和 开始时间
     // 只要 rxQp->m_size 还是 0，就说明我们还没拿到“总任务书”
     if (rxQp->m_size == 0) {
+        
         FlowIDNUMTag fint;
         if (p->PeekPacketTag(fint)) {
             rxQp->m_size = fint.GetFlowSize();
+            //std::cout<<"我是Node "<<m_node->GetId()<<"收到流ID为"<<rxQp->m_flow_id<<"的流的总大小是"<<rxQp->m_size<<std::endl;
         }
     }
     
@@ -381,7 +383,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
      // 累加到 QP 中
     rxQp->received_bytes += effectiveDataBytes;
     
-    std::cout << "   -> Type: " << (int)type 
+    std::cout << "  我是Node " << (int)type << "包，Node " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
               << " Raw: " << rawPayloadSize 
               << " Effective: " << effectiveDataBytes 
               << " TotalRecv: " << rxQp->received_bytes 

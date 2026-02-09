@@ -55,6 +55,7 @@
 #include "ns3/udp-header.h"
 #include "ns3/uinteger.h"
 #include "switch-node.h"
+#include <bitset> // 必须包含这个头文件
 #define MAP_KEY_EXISTS(map, key) (((map).find(key) != (map).end()))
 
 NS_LOG_COMPONENT_DEFINE("QbbNetDevice");
@@ -512,7 +513,7 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     
     m_replayBuffer->AddNewPacket(m_next_seq_num,flitPayload);
 
-   m_next_seq_num++;
+   
 
     // =========================================================
     // 7. 更新状态
@@ -557,7 +558,8 @@ void QbbNetDevice::TriggerNak(uint8_t vc_id, uint16_t seq) {
     nakseq = seq;
     nakbitmap=m_rxBuffer->GenerateNackBitmap(nakseq);
     // NAK 很急！即使没有数据要发，也得赶紧造一个控制包发出去
-    
+    std::cout<<"Node "<<m_node->GetId()<<"的device"<<m_ifIndex<<"发现乱序了，执行triggernak函数，此时nakseq是"<<seq;
+    PrintBitmap(nakbitmap);
     if (m_txMachineState == READY) {
         
         std::cout<<"Node "<<m_node->GetId()<<" device  "<<m_ifIndex<<" 因为有nak要发所以要dequeue了 "<<std::endl;
@@ -566,54 +568,58 @@ void QbbNetDevice::TriggerNak(uint8_t vc_id, uint16_t seq) {
 }
 // 这个函数负责把 ACK "缝"到数据包上。它严格遵守 "同 VC 捎带" 原则
 void QbbNetDevice::PiggybackAck(Ptr<Packet> p) {
+    // 1. 先剥离最外层的 CommonHeader
+    CommonHeader common;
+    p->RemoveHeader(common); 
+
+    // 2. 现在最外层是 FlitHeader 了，可以安全操作
     FlitHeader fh;
     p->PeekHeader(fh);
+    
     uint8_t current_vc = fh.GetVcId();
-
-    if (current_vc >= 8) return;
-
-    // 检查状态机
-    if (m_ctrl_state[current_vc] != CTRL_NONE) {
-        std::cout<<" Node "<<m_node->GetId()<<"  device  "<<m_ifIndex<<"触发了piggybackack函数  ack序号是"<<m_ctrl_seq[current_vc];
-        p->RemoveHeader(fh); // 剥离旧头
-
-        // 填入序号
-        if (m_ctrl_state[current_vc] == CTRL_ACK) {//这里只判断ack就够了
-            std::cout<<"是ack"<<std::endl;
-            fh.SetAck(m_ctrl_seq[current_vc]); // 设置 ACK 标志和序号
-            // NS_LOG_INFO("Piggybacking ACK " << m_ctrl_seq[current_vc]);
-        } 
-        
-        p->AddHeader(fh); // 加回新头
-
-        // 关键：捎带完之后，状态清零
-        
-        m_ctrl_state[current_vc] = CTRL_NONE; 
+    if (current_vc >= 8) {
+        // 记得把 CommonHeader 加回去！
+        p->AddHeader(common); 
+        return;
     }
+
+    if (m_ctrl_state[current_vc] != CTRL_NONE) {
+        p->RemoveHeader(fh); // 取下 FlitHeader
+        
+        if (m_ctrl_state[current_vc] == CTRL_ACK) {
+            fh.SetAck(m_ctrl_seq[current_vc]);
+        }
+        
+        p->AddHeader(fh);    // 装回 FlitHeader
+        m_ctrl_state[current_vc] = CTRL_NONE;
+    }
+
+    // 3. 最后把 CommonHeader 装回去
+    p->AddHeader(common); 
 }
 void QbbNetDevice::piggycredit(Ptr<Packet> p) {
-    // 1. 获取当前数据包的 VC ID
-    // 假设你使用 FlitHeader 或 CustomHeader，这里以 FlitHeader 为例
+    // 1. 剥离 CommonHeader
+    CommonHeader common;
+    p->RemoveHeader(common);
+
     FlitHeader fh;
     p->PeekHeader(fh);
     uint8_t current_vc = fh.GetVcId();
 
-    // 安全检查
-    if (current_vc >= 8) return;
-
-    // 2. 检查：该 VC 是否有信用要回送
-    if (creditflag) {
-        //std::cout<<" Node "<<m_node->GetId()<<"  device  "<<m_ifIndex<<"触发了piggycredit函数  信用值是"<<m_rxCumulativeFreed<<std::endl;
-        p->RemoveHeader(fh);
-        
-        fh.SetCredit(0, m_rxCumulativeFreed);  // 捎带credit字段
-        p->AddHeader(fh);
-
-        // 3. 销账
-        creditflag = false;
-
-        
+    if (current_vc >= 8) {
+        p->AddHeader(common);
+        return;
     }
+
+    if (creditflag) {
+        p->RemoveHeader(fh);
+        fh.SetCredit(0, m_rxCumulativeFreed);
+        p->AddHeader(fh);
+        creditflag = false;
+    }
+
+    // 2. 装回 CommonHeader
+    p->AddHeader(common);
 }
 
 void QbbNetDevice::DequeueAndTransmit(void) {
@@ -1110,8 +1116,10 @@ PROCESS_NEW_PACKET:
     swNode->releasecredit(m_ifIndex);//这里是向ingress释放一个空间
      }
     // 4.4 发射
+    //std::cout<<"switch Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"发新包了，序号是"<<fh.GetSeqNum()<<std::endl;
     TransmitStart(p);
-        
+    
+
         //能走到这里的都是没有包可以发送的情况
     }
     
@@ -1177,6 +1185,10 @@ void QbbNetDevice::ProcessAck(uint16_t ackSn) {
     UpdateRtoTimer();
     
 }
+void QbbNetDevice::PrintBitmap(uint32_t bitmap) {
+    // std::bitset<32> 会把数字转换为32位的二进制对象
+    std::cout << "Bitmap (Binary): " << std::bitset<32>(bitmap) << std::endl;
+}
 void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
     NS_LOG_FUNCTION(this << firstMissing << bitmap);
 
@@ -1199,7 +1211,6 @@ void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
     
     // 只有当它是合法的未确认包时才处理
     if (dist < m_bufferSize) { 
-        
         // 1. 检查是否已经确认 (可能 ACK 乱序先到了)
         bool alreadyAcked = m_replayBuffer->IsAcked(firstMissing);
         
@@ -1297,6 +1308,8 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         packet->PeekHeader(nak);
         uint16_t firstMissing=nak.GetFirstMissing();
         uint32_t bitmap=nak.GetBitmap();
+        std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到nak了，firstMissing是"<<firstMissing;
+        PrintBitmap(bitmap);
         processnak(firstMissing, bitmap);
         return;
     }
@@ -1321,7 +1334,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     uint8_t vc = fh.GetVcId();
     uint8_t type = fh.GetType();
     uint32_t  payloadsize=fh.GetPktTotalBytes();
-    std::cout<<"Node "<<m_node->GetId()<<"收到的flit头部携带的pkttotalbytes大小是"<<payloadsize<<std::endl;
+    std::cout<<"Node "<<m_node->GetId()<<"收到的flit头部携带的pkttotalbytes大小是"<<payloadsize<<"  收到的seq是  "<<seq<<std::endl;
     // ---------------------------------------------------------
     // 第一步：无条件提取捎带信息 (Process Piggyback FIRST)
     // ---------------------------------------------------------
@@ -1392,7 +1405,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
             while (m_rxBuffer->IsReceived(m_rxNext)) {
                 m_rxNext = (m_rxNext + 1) % MAX_SN;
             }
-
+            std::cout<<"交换机Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了期望的flit，填坑成功，seq是"<<seq<<"目前的m_rxNext是"<<m_rxNext<<"，现在开始转发了"<<std::endl;
             // (2) 触发转发 (Trigger)
             // 你说"只要触发一次转发，后面连续转发会自动进行"
             // 所以这里我们将当前包传给 SwitchReceiveFromDevice 作为触发信号
@@ -1405,6 +1418,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
             TriggerAck(0, m_rxNext);
 
         } else {
+            std::cout<<"交换机Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了一个乱序的flit，seq是"<<seq<<"，期望的seq是"<<m_rxNext<<"，我先把它存起来，等它变成期望的seq的时候再转发"<<std::endl;
             // [乱序到达]
             // 只存包，发 NACK，不触发转发
             if (CheckNackCooldown()) {
@@ -1434,7 +1448,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 3. 提交循环 (Commit Loop)
         // 只有填坑成功才执行
         if (seq == m_rxNext) {
-            
+            std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了期望的flit，填坑成功，seq是"<<seq<<"，现在开始提交了"<<std::endl;
             int commitCount = 0;
 
             // 循环处理 buffer 中所有连续的包
@@ -1463,6 +1477,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
             }
 
         } else {
+            std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了一个乱序的flit，seq是"<<seq<<"，期望的seq是"<<m_rxNext<<"，我先把它存起来，等它变成期望的seq的时候再提交"<<std::endl;
             // [乱序到达]
             // 只存包，发 NACK，不提交
             if (CheckNackCooldown()) {

@@ -96,7 +96,7 @@ public:
   static const uint32_t maxHop = 1; // Max hop count in the network. should not exceed 16 
   //*******************************发送端要维护的变量**********************************************/
   void ReloadRetransQueue(uint16_t start_seq);// 辅助函数：清空并重新填装重传队列
-  
+  void PrintBitmap(uint32_t bitmap);
   // 职责：打上序号 + 存入重传缓冲区
     void PrepareNewPacket(Ptr<Packet> p);
     // 参数 is_nack: true 发 NACK, false 发 ACK (一般用于重复包的立即重确认)

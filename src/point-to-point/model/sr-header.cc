@@ -5,7 +5,7 @@
 #include "ns3/log.h"
 #include "sr-header.h"
 
-NS_LOG_COMPONENT_DEFINE ("FlitHeader");
+NS_LOG_COMPONENT_DEFINE ("SrHeader");
 
 namespace ns3 {
 
