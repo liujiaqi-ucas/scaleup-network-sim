@@ -241,7 +241,7 @@ void PreloadCollectiveFlows() {
         uint32_t sId = (uint32_t)stepId_raw; // 转为整数 Step ID
 
         // 存入管理器
-        step_manager[sId].push_back({src, dst, pg, size});
+        step_manager[sId].push_back({src, dst, pg,(uint32_t) size});
         step_total_flows[sId]++;
         
         // 更新最大步数
@@ -1535,8 +1535,8 @@ std::cout<<"333333333"<<std::endl;
             sw->m_mmu->ConfigBufferSize(buffer_size * 1024 *
                                         1024);  // default 0, specify in run.py!!
             sw->m_mmu->node_id = sw->GetId();
-            NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
-                        (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));
+            //NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
+                       // (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));
         }
     }
 
@@ -1898,7 +1898,7 @@ std::cout<<"333333333"<<std::endl;
             if (i->first->GetNodeType() == 1) {
                 Ptr<Node> node = i->first;
                 Ptr<SwitchNode> sw = DynamicCast<SwitchNode>(node);  // switch
-                NS_LOG_INFO("Switch Info - ID:%u, ToR:%d\n" % (sw->GetId(), sw->m_isToR));
+                //NS_LOG_INFO("Switch Info - ID:%u, ToR:%d\n" % (sw->GetId(), sw->m_isToR));
                 if (lb_mode == 3) {
                     sw->m_mmu->m_congaRouting.SetConstants(conga_dreTime, conga_agingTime,
                                                            conga_flowletTimeout, conga_quantizeBit,

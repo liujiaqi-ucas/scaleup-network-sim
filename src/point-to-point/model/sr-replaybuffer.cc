@@ -95,7 +95,14 @@ Ptr<Packet>
 ReplayBuffer::GetFlit(uint16_t sn) 
 {
     uint16_t idx = GetIndex(sn);
-    return m_buffer[idx].flit;
+    Ptr<Packet> p = m_buffer[idx].flit;
+    
+    // 打印指针地址，看看是不是 0 (nullptr)
+    // 如果这里打印了 0，说明 AddNewPacket 没成功或者被 FreeSlots 清了
+    // 如果这里程序崩了，说明 m_buffer 坏了
+     std::cout << "DEBUG: GetFlit SN=" << sn << " Idx=" << idx << " Ptr=" << p << std::endl;
+    
+    return p;
 }
 
 bool 

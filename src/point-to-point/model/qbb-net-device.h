@@ -191,11 +191,13 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     std::vector<bool> m_isReceived;
     uint16_t m_rxNext;       // 【ACK 指针】：连续收到的最高序号 + 1
     uint16_t m_forwardNext;  // 【转发指针】：等待进入交换机的队头
-    
+    // 【新增】记录上次 NAK 的 FirstMissing 序号
+    // 用于判断是否是“新的故障”
+    uint16_t m_lastNakSeq;
     
     bool cantransmit();//判断当前的重排序缓冲区能否转发包
    // 辅助函数：检查是否过了冷却期
-    bool CheckNackCooldown();
+    bool CheckNackCooldown(uint16_t currentMissingSeq);
 
     // 状态变量
     Time m_lastNackTime;   // 上次发送 NACK 的时刻
@@ -204,11 +206,11 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     bool nakflag;//表示当前有nak要发送
     uint16_t nakseq;//表示当前要发送的nak序号
     uint32_t nakbitmap;//表示当前要发送的nak位图
-    void UpdateRtoTimer();
-    void HandleRtoTimeout ();
-    Time m_rtoBase;  // 必须在这里
-    Time m_rtoValue;
-    EventId m_rtoEvent;
+     void UpdateRtoTimer();
+     void HandleRtoTimeout ();
+     Time m_rtoBase;  // 必须在这里
+     Time m_rtoValue;
+     EventId m_rtoEvent;
    //*********************************************************************************** */
   static TypeId GetTypeId (void);
 
