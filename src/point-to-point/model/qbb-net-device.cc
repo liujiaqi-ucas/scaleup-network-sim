@@ -449,7 +449,7 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     // 3. 【分配序号】(用于 GBN/SR 重传)
     // =========================================================
     uint16_t seq = m_next_seq_num;
-    m_next_seq_num++; 
+    //m_next_seq_num++; 
 
     // =========================================================
     // 4. 【确定 Flit 类型】(自动判断，不再需要手动硬编码)
@@ -541,9 +541,9 @@ void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
     // 6. 【存入重传缓冲区】
     // =========================================================
     
-    
+   // std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<":  "<<std::endl;
     m_replayBuffer->AddNewPacket(m_next_seq_num,flitPayload->Copy());
-
+    m_next_seq_num++;
    
 
     // =========================================================
@@ -720,7 +720,12 @@ void QbbNetDevice::DequeueAndTransmit(void) {
     // 5. 【提货】：去仓库 (ReplayBuffer) 拿数据
     // 注意：GetFlit 返回的是 Ptr<Flit>
      p = m_replayBuffer->GetFlit(sn);
-    std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"从重传缓冲区拿出了SN="<<sn<<std::endl;
+     CommonHeader cotemp;
+     FlitHeader fhtemp;
+     p->RemoveHeader(cotemp);
+     p->PeekHeader(fhtemp);
+     std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"从重传缓冲区拿出了SN="<<sn<<"，这个包的SeqNum是"<<fhtemp.GetSeqNum()<<std::endl;
+     p->AddHeader(cotemp);
     // 防御性检查：万一指针是空的（极少见）
     if (p) {
         std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"根据重传队列拿出的包的SN="<<sn<<"准备发出去了"<<std::endl;
@@ -1145,7 +1150,7 @@ PROCESS_NEW_PACKET:
     FlitHeader fh;
     p->RemoveHeader(fh);           // 1. 取下旧头 (端侧的或上一跳的)
     fh.SetSeqNum(m_next_seq_num);  // 2. 更新为本端口的发送序号
-    m_next_seq_num++;              // 3. 指针自增
+    //m_next_seq_num++;              // 3. 指针自增
     p->AddHeader(fh);              // 4. 装回新头
     p->AddHeader(common);
     //做一些统计
@@ -1161,9 +1166,9 @@ PROCESS_NEW_PACKET:
     // 这里的 fh.GetSeqNum() 就是刚才设置的 m_next_seq_num
     // 1. 计算物理索引 (找坑位)
    //    利用环形特性找到 m_next_seq_num 对应的数组下标
-    
+    //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<":  "<<std::endl;
     m_replayBuffer->AddNewPacket(m_next_seq_num,p->Copy());
-
+    m_next_seq_num++;
     // 4.3 通知上层 (如果你的 SwitchNode 需要统计或处理)
      Ptr<SwitchNode> swNode = DynamicCast<SwitchNode>(m_node);
      if(swNode){
@@ -1214,6 +1219,7 @@ void QbbNetDevice::ProcessAck(uint16_t ackSn) {
     
     // 我们需要逐个处理从 m_txUna 到 ackSn 之间的每一个槽位
     // 为什么不直接跳？因为要清理 ReplayBuffer 的状态
+    std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<":  "<<std::endl;
     m_replayBuffer->FreeSlots(m_txUna, ackSn);
 
     // ==========================================
@@ -1276,8 +1282,9 @@ void QbbNetDevice::processnak(uint16_t firstMissing, uint32_t bitmap) {
         //    防止刚发出去的包因为 NACK 风暴被重复加队
         Time lastSent = m_replayBuffer->GetLastSentTime(firstMissing);
         bool isCoolingDown = (Simulator::Now() - lastSent) < NanoSeconds(m_rttEstimate);
-
-        if (!alreadyAcked && !alreadyQueued && !isCoolingDown) {
+        // 【关键修改】获取该包的重传次数
+        uint8_t retxCount = m_replayBuffer->GetRetxCount(firstMissing);
+        if (!alreadyAcked && !alreadyQueued && (!isCoolingDown || retxCount == 0)) {
             // ---> 加入高优先级队列
             m_retransQueue.push_back(firstMissing);
             std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"是"<<firstMissing<<std::endl;

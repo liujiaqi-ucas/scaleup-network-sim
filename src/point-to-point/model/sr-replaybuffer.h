@@ -17,16 +17,18 @@ namespace ns3 {
  * 维护 Flit 指针及其发送状态
  */
 struct ReplayEntry {
-    Ptr<Packet> flit;         // 数据副本
-    bool isAcked;           // true: 对方已收到; false: 等待确认
-    bool isRetransmitting;  // true: 正在重传队列中 (防止重复入队)
-    Time lastSentTime;      // 上次物理发送的时间 (用于 RTT 冷却判断)
+    Ptr<Packet> flit;
+    bool isAcked;
+    bool isRetransmitting;
+    Time lastSentTime;
+    uint8_t retxCount; // <--- 【新增】记录重传次数
 
     ReplayEntry() 
         : flit(nullptr), 
-          isAcked(true),    // 默认为 true (空闲状态视为已解决)
+          isAcked(true), 
           isRetransmitting(false), 
-          lastSentTime(Seconds(0)) {}
+          lastSentTime(Seconds(0)),
+          retxCount(0) {} // <--- 【新增】初始化为0
 };
 
 /**
@@ -62,7 +64,7 @@ public:
     void FreeSlots(uint16_t oldUna, uint16_t newTxUna);
 
     // ============ 状态查询与获取 ============
-
+    uint8_t GetRetxCount(uint16_t sn);
     /**
      * @brief 获取 Flit 指针 (用于重传发送)
      */

@@ -1,138 +1,158 @@
 #include "sr-replaybuffer.h"
 #include "ns3/log.h"
-
+#include <iostream> // 用于 std::cout
 
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE("ReplayBuffer");
 
+// 构造函数：初始化重传缓冲区
 ReplayBuffer::ReplayBuffer(uint16_t size)
     : m_size(size)
 {
-    // 初始化 vector 大小
+    // 设置 vector 的大小
     m_buffer.resize(m_size);
     NS_LOG_INFO("ReplayBuffer created with size " << m_size);
 }
 
+// 析构函数：清理资源
 ReplayBuffer::~ReplayBuffer() 
 {
     m_buffer.clear();
 }
 
+// 辅助函数：根据序列号计算在 vector 中的索引
 uint16_t 
 ReplayBuffer::GetIndex(uint16_t sn) const 
 {
-    // 简单的取模运算实现环形映射
+    // 使用取模运算实现环形缓冲区映射
     return sn % m_size;
 }
 
+// 核心函数：添加新包到重传缓冲区
 void 
 ReplayBuffer::AddNewPacket(uint16_t sn, Ptr<Packet> flit) 
 {
     uint16_t idx = GetIndex(sn);
 
-    // 安全检查：理论上这个位置应该是空闲的 (isAcked=true)
-    // 如果 Controller 的流控做得好，这里不会覆盖未确认的数据
+    // 安全检查：理论上我们要写入的位置应该是空闲的 (isAcked=true)
+    // 如果流控机制工作正常，这里不应该覆盖尚未确认的数据
     if (!m_buffer[idx].isAcked) {
-        NS_LOG_WARN("Overwriting un-acked data at SN " << sn << "! Flow control might be broken.");
+        NS_LOG_WARN("警告：正在覆盖 SN " << sn << " 的未确认数据！流控机制可能已损坏。");
     }
 
-    // 重置条目状态
-    m_buffer[idx].flit = flit;
-    m_buffer[idx].isAcked = false;            // 标记为等待确认
-    m_buffer[idx].isRetransmitting = false;   // 初始状态不在重传队列
-    m_buffer[idx].lastSentTime = Simulator::Now(); // 记录初次发送时间
+    // 重置该条目的状态
+    m_buffer[idx].flit = flit;              // 存入数据包（副本）
+    m_buffer[idx].isAcked = false;          // 标记为“等待确认”
+    m_buffer[idx].isRetransmitting = false; // 初始状态：不在重传队列中
+    m_buffer[idx].lastSentTime = Simulator::Now(); // 记录当前的发送时间
+    m_buffer[idx].retxCount = 0; // <--- 【新增】新包入队，重传计数归零
     
+    // 【调试打印】：入队时打印 SN 和 Vector 下标
+    //std::cout << "ReplayBuffer [入队]: 存入 SN=" << sn << " 到 Vector 下标=" << idx << std::endl;
+
     NS_LOG_DEBUG("Added new flit SN " << sn << " at index " << idx);
 }
 
+// 核心函数：标记某个包已被确认 (ACK)
 void 
 ReplayBuffer::MarkAcked(uint16_t sn) 
 {
     uint16_t idx = GetIndex(sn);
     
     if (m_buffer[idx].isAcked) {
-        return; // 已经确认过了，无需操作
+        return; // 如果已经确认过了，直接返回
     }
 
     m_buffer[idx].isAcked = true;
-    // 注意：我们这里不删除 flit 指针 (m_buffer[idx].flit = nullptr)
-    // 而是等到 FreeSlots (窗口滑动) 时再删，或者为了调试保留引用。
-    // 在 SR 协议中，isAcked=true 就足够阻止它被重传了。
+    // 注意：我们这里不立即删除 flit 指针 (m_buffer[idx].flit = nullptr)
+    // 而是等到 FreeSlots (滑动窗口移动) 时再删。
+    // 在 SR 协议中，只要 isAcked=true，它就不会被重传了。
     
     NS_LOG_DEBUG("Marked SN " << sn << " as ACKED");
 }
 
+// 核心函数：滑动窗口，清理旧数据
 void 
 ReplayBuffer::FreeSlots(uint16_t oldUna, uint16_t newTxUna) 
 {
-    // 计算需要清理的区间
-    // 注意：这里的循环条件需要处理序列号回绕，但因为我们是操作 buffer
-    // 只要 newTxUna 确实是比 oldUna 靠后的（Controller 保证），
-    // 我们直接按逻辑距离循环即可。
-    
-    // 这里为了简化，假设 Controller 调用时 oldUna 和 newTxUna 的距离是正常的
-    // 更好的做法是 Controller 告诉我们 "释放哪个 SN"
+    // 计算需要清理的区间 [oldUna, newTxUna)
+    // 这里循环清理从 oldUna 开始，直到 newTxUna 之前的所有包
     
     uint16_t current = oldUna;
-    // 假设 MAX_SN 是外部定义的，这里用简单的 != 来遍历
-    // 实际使用建议传入 distance 避免回绕死循环
+    
+    // 假设 MAX_SN 是外部定义的 (例如 65536)，用于处理序号回绕
     while (current != newTxUna) {
         uint16_t idx = GetIndex(current);
         
+        // 【调试打印】：出队/清理时打印
+        // 只有当这里原本存有数据时才打印，避免打印空槽位
+        if (m_buffer[idx].flit != nullptr) {
+            //std::cout << "ReplayBuffer [清理]: 清空 Vector 下标=" << idx << " (原 SN=" << current << ")" << std::endl;
+        }
+
         // 清理内存
-        m_buffer[idx].flit = nullptr; 
-        m_buffer[idx].isAcked = true; // 恢复为默认安全状态
+        m_buffer[idx].flit = nullptr;   // 释放 Packet 指针
+        m_buffer[idx].isAcked = true;   // 恢复为默认安全状态 (已确认/空闲)
         
-       // 【建议改为这样】
-        // 无论 maxSn 是 4096 还是 65536，这行代码都是对的
-        // 注意：如果是 65536，这里需要用 uint32_t 强转一下防止计算溢出后再取模
+        // 处理序号回绕 (Wrap-around)
         current = (current + 1) % MAX_SN;
     }
 }
 
+// 获取包指针（用于重传）
 Ptr<Packet> 
 ReplayBuffer::GetFlit(uint16_t sn) 
 {
     uint16_t idx = GetIndex(sn);
     Ptr<Packet> p = m_buffer[idx].flit;
     
-    // 打印指针地址，看看是不是 0 (nullptr)
-    // 如果这里打印了 0，说明 AddNewPacket 没成功或者被 FreeSlots 清了
-    // 如果这里程序崩了，说明 m_buffer 坏了
-     std::cout << "DEBUG: GetFlit SN=" << sn << " Idx=" << idx << " Ptr=" << p << std::endl;
+    // 【调试打印】：取包时打印地址，检查是否为空
+    // std::cout << "DEBUG: GetFlit SN=" << sn << " Idx=" << idx << " Ptr=" << p << std::endl;
     
     return p;
 }
 
+// 查询状态：是否已确认
 bool 
 ReplayBuffer::IsAcked(uint16_t sn) 
 {
     return m_buffer[GetIndex(sn)].isAcked;
 }
 
+// 查询状态：是否正在重传中
 bool 
 ReplayBuffer::IsRetransmitting(uint16_t sn) 
 {
     return m_buffer[GetIndex(sn)].isRetransmitting;
 }
 
+// 设置状态：是否正在重传中
 void 
 ReplayBuffer::SetRetransmitting(uint16_t sn, bool val) 
 {
     m_buffer[GetIndex(sn)].isRetransmitting = val;
 }
 
+// 获取上次发送时间
 Time 
 ReplayBuffer::GetLastSentTime(uint16_t sn) 
 {
     return m_buffer[GetIndex(sn)].lastSentTime;
 }
 
+// 更新上次发送时间
 void 
 ReplayBuffer::UpdateLastSentTime(uint16_t sn) 
 {
-    m_buffer[GetIndex(sn)].lastSentTime = Simulator::Now();
+   uint16_t idx = GetIndex(sn);
+    m_buffer[idx].lastSentTime = Simulator::Now();
+    m_buffer[idx].retxCount++; // <--- 【新增】每次更新时间（意味着重传了一次），计数+1
+}
+uint8_t 
+ReplayBuffer::GetRetxCount(uint16_t sn) 
+{
+    return m_buffer[GetIndex(sn)].retxCount;
 }
 
 } // namespace ns3

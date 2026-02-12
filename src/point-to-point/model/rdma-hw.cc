@@ -248,6 +248,7 @@ Ptr<RdmaRxQueuePair> RdmaHw::GetRxQp(uint32_t sip, uint32_t dip, uint16_t sport,
         //q->m_ecn_source.qIndex = pg;
         q->m_flow_id = -1;     // unknown
         m_rxQpMap[rxKey] = q;  // store in map
+        std::cout<<"Node "<<m_node->GetId()<<" 创建了新的一个 RxQp  "<<std::endl;
         return q;
     }
     return NULL;
@@ -261,7 +262,28 @@ uint32_t RdmaHw::GetNicIdxOfRxQp(Ptr<RdmaRxQueuePair> q) {
     std::cout << "We assume at least one NIC is alive" << std::endl;
     exit(1);
 }
-
+// void RdmaHw::DeleteRxQp(Ptr<RdmaRxQueuePair> q) {
+//     if (q) {
+//         // 从 q 对象中提取 key 所需的参数
+//         // 注意：GetRxQpKey 的参数顺序是 (dip, dport, sport, pg)
+//         // 这里的 q->dip/sip 是整数 IP，q->dport/sport 是端口
+//         // 这里的 pg 我们可能需要从 q 里取，或者默认 0
+//         // 假设 RdmaRxQueuePair 里没有存 pg，通常需要加上，或者传参
+        
+//         // 仔细看你的 RxQP 定义，通常应该有 m_pg 或者类似字段
+//         // 如果没有，你需要用原始的那个函数
+        
+//         // 假设 q->m_flow_id 对应的 pg (在你的 Step 逻辑里 pg 通常是 3)
+//         // 为了稳妥，建议直接调用原始版本，参数从 q 里取：
+//         // DeleteRxQp(q->dip, q->dport, q->sport, q->m_pg); <--- 确保 RxQP 有这些成员
+        
+//         // 修正：GetRxQpKey 需要的参数顺序
+//         // key = ((uint64_t)dip << 32) | ((uint64_t)pg << 16) | ((uint64_t)sport << 16) | (uint64_t)dport;
+        
+//         // 我们直接复用原函数逻辑：
+//         DeleteRxQp(q->dip, q->dport, q->sport, 3); // ⚠️ 注意：pg 参数这里如果是 3 (Priority Group)
+//     }
+// }
 // Receiver's perspective?
 void RdmaHw::DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t pg) {
     uint64_t key = GetRxQpKey(dip, dport, sport, pg);
@@ -269,7 +291,7 @@ void RdmaHw::DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t p
     // record to Akashic record
     NS_ASSERT(akashic_RxQp.find(key) == akashic_RxQp.end());  // should not be already existing
     akashic_RxQp.insert(key);
-
+    std::cout<<"Node "<<m_node->GetId()<<" 删除了一个  RxQp  "<<std::endl;
     // delete
     m_rxQpMap.erase(key);
 }
@@ -347,7 +369,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
         FlowIDNUMTag fint;
         if (p->PeekPacketTag(fint)) {
             rxQp->m_size = fint.GetFlowSize();
-            //std::cout<<"我是Node "<<m_node->GetId()<<"收到流ID为"<<rxQp->m_flow_id<<"的流的总大小是"<<rxQp->m_size<<std::endl;
+            std::cout<<"我是Node "<<m_node->GetId()<<"收到流ID为"<<rxQp->m_flow_id<<"的流的总大小是"<<rxQp->m_size<<std::endl;
         }
     }
     

@@ -25,7 +25,7 @@ typedef Callback<void, Ptr<RdmaRxQueuePair>, double> RxFlowCompleteCallback;
 class RdmaHw : public Object {
    public:
    RxFlowCompleteCallback m_rxFlowCompleteCb;
-
+    //void DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t pg);
     //定义设置函数
     void SetRxFlowCompleteCallback(RxFlowCompleteCallback cb) {
         m_rxFlowCompleteCb = cb;
