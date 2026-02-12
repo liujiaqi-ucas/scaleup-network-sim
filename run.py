@@ -246,7 +246,7 @@ def main():
     # --- [修改 ] 强制使用手动生成的 Scale-up 流量文件 ---
     # 这里填写你在 gen_scaleup_traffic.py 里生成的文件名（不带 .txt）
     # 如果你想跑 All-to-All，就改成 flow_alltoall
-    target_flow_name = "flow_alltoall"
+    target_flow_name = "flow_allreduce"
     
     flow = target_flow_name
     flow_file_path = os.getcwd() + "/config/" + flow + ".txt"
