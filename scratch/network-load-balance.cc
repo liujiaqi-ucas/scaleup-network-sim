@@ -593,6 +593,26 @@ void rx_flow_finish(FILE *fout, Ptr<RdmaRxQueuePair> rxQp, double startTime) {
               << " FCT: " << fct << " ns" << std::endl;
               // --- [新增：动态推进逻辑] ---
     //uint32_t sId = (uint32_t)rxQp->m_statFlowID; 
+    // =============================================================
+    // 【新增】主动销毁 RxQP，防止残留
+    // =============================================================
+    // 1. 找到目的节点对象
+    Ptr<Node> dstNode = n.Get(dstId); 
+    
+    // 2. 获取 RDMA 驱动和硬件层
+    Ptr<RdmaDriver> driver = dstNode->GetObject<RdmaDriver>();
+    if (driver && driver->m_rdma) {
+        // 3. 调用删除函数
+        // ⚠️ 注意：这里硬编码了 pg = 3。
+        // 如果你的 flow_allreduce.txt 里第三列 pg 不是 3，请修改这里！
+        uint16_t pg_to_delete = 3; 
+        
+        driver->m_rdma->DeleteRxQp(rxQp->dip, rxQp->dport, rxQp->sport, pg_to_delete);
+        
+        // 调试打印 (可选)
+        // std::cout << "   接受数据量到了，我现在删除了一个rxqp " << sId << std::endl;
+    }
+    // =============================================================
     step_finished_count[sId]++;
 // 检查：这一步的所有流都到齐了吗？
     if (step_finished_count[sId] == step_total_flows[sId]) {
