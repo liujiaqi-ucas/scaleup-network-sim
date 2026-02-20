@@ -299,7 +299,7 @@ public:
 	void RdmaEnqueueHighPrioQ(Ptr<Packet> p);
 
 	// callback for processing packet in RDMA
-	typedef Callback<int, Ptr<Packet>, CustomHeader&> RdmaReceiveCb;
+	typedef Callback<int, Ptr<Packet>, CustomHeader&, uint32_t> RdmaReceiveCb;
 	RdmaReceiveCb m_rdmaReceiveCb;
 	// callback for link down
 	typedef Callback<void, Ptr<QbbNetDevice> > RdmaLinkDownCb;

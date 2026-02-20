@@ -44,7 +44,7 @@ def gen_all_reduce_ring(num_gpus, total_size_bytes):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--ngpus', type=int, default=8, help="GPU 数量")
-    parser.add_argument('-s', '--size', type=int, default=64, help="总数据量 (MB)")
+    parser.add_argument('-s', '--size', type=float, default=64, help="总数据量 (MB)")
     args = parser.parse_args()
 
     total_bytes = args.size * 1024 * 1024

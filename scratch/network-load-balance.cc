@@ -193,7 +193,8 @@ uint16_t *port_per_host;
  uint32_t flow_num;
 // --- [新增] Scale-up 动态任务管理结构 ---
 struct StepTask {
-    uint32_t src, dst, pg, size;
+    uint32_t src, dst, pg;
+    double size; // bytes
 };
 
 std::map<uint32_t, std::vector<StepTask>> step_manager;   // 存储每个 Step 的流列表
@@ -231,7 +232,8 @@ void PreloadCollectiveFlows() {
     std::cout << "[Init] Preloading " << flow_num << " flows..." << std::endl;
 
     for (uint32_t i = 0; i < flow_num; ++i) {
-        uint32_t src, dst, pg, size;
+        uint32_t src, dst, pg;
+        double size;
         double stepId_raw; // 文件最后一列可能是浮点数格式，先读出来
         
         // 读取一行：src dst pg size step_id

@@ -1325,7 +1325,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     } else {  // NIC
 
         // send to RdmaHw
-        int ret = m_rdmaReceiveCb(packet, ch);
+        int ret = m_rdmaReceiveCb(packet, ch,m_ifIndex);
         // TODO we may based on the ret do something
         //if (ret == 0) DoMpiReceive(packet);//这个我先给注释了，好像对我没啥影响
     }

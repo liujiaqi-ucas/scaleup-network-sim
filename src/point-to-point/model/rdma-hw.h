@@ -36,7 +36,8 @@ class RdmaHw : public Object {
 
     static TypeId GetTypeId(void);
     RdmaHw();
-    Ptr<RdmaRxQueuePair> m_currentRxQp; // 用于缓存当前正在接收的 QP
+    //Ptr<RdmaRxQueuePair> m_currentRxQp; // 用于缓存当前正在接收的 QP
+    std::unordered_map<uint32_t, Ptr<RdmaRxQueuePair>> m_currentRxQpPerDev;  // key = device index 或 interface id
     Ptr<Node> m_node;
     DataRate m_minRate;  //< Min sending rate
     uint32_t m_mtu;
@@ -87,11 +88,11 @@ class RdmaHw : public Object {
     uint32_t GetNicIdxOfRxQp(Ptr<RdmaRxQueuePair> q);        // get the NIC index of the rxQp
     void DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t pg);  // delete RxQP
 
-    int ReceiveUdp(Ptr<Packet> p, CustomHeader &ch);
+    int ReceiveUdp(Ptr<Packet> p, CustomHeader &ch, uint32_t dev_idx);  // receive UDP packet from NIC, return 0 if success, otherwise return 1 (drop)
     
     int Receive(Ptr<Packet> p,
                 CustomHeader &
-                    ch);  // callback function that the QbbNetDevice should use when receive
+                    ch,uint32_t dev_idx);  // callback function that the QbbNetDevice should use when receive
                           // packets. Only NIC can call this function. And do not call this upon PFC
 
     

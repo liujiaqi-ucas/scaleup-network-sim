@@ -154,40 +154,53 @@ void SwitchMmu::WakeupIngress(uint32_t inDev) {
 
 
 void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
-    // Round-Robin 轮询：从上次服务位置的下一个开始查
-    uint32_t start = (m_rrPtr[outDev] + 1) % m_activePortCnt;
-    uint32_t curr = start;
+    // // Round-Robin 轮询：从上次服务位置的下一个开始查
+    // uint32_t start = (m_rrPtr[outDev] + 1) % m_activePortCnt;
+    // uint32_t curr = start;
 
-    for (uint32_t i = 1; i <= m_activePortCnt; i++) {
-        // 1. 如果这个入端口有包在排队
-        // 【关键改进】先检查：这个入端口是否真的在等待这个出端口的锁？
-        // 这样就避免了误唤醒那些等待 Credit 的人，或者刚来的人。
-        // m_waitingForLock 是 std::set，count 很快
-        if (m_waitingForLock[outDev].count(curr)) {
+    // for (uint32_t i = 1; i <= m_activePortCnt; i++) {
+    //     // 1. 如果这个入端口有包在排队
+    //     // 【关键改进】先检查：这个入端口是否真的在等待这个出端口的锁？
+    //     // 这样就避免了误唤醒那些等待 Credit 的人，或者刚来的人。
+    //     // m_waitingForLock 是 std::set，count 很快
+    //     if (m_waitingForLock[outDev].count(curr)) {
             
-            // 双重保险：检查队列是否非空
-            if (!m_ingressQueues[curr].empty()) {
+    //         // 双重保险：检查队列是否非空
+    //         if (!m_ingressQueues[curr].empty()) {
                 
-                // 1. 移除等待名单 (必须先做)
+    //             // 1. 移除等待名单 (必须先做)
+    //             m_waitingForLock[outDev].erase(curr);
+
+    //             // 2. 更新轮询指针 (公平性)
+    //             m_rrPtr[outDev] = curr;
+
+    //             // 3. 唤醒！(它会重置 blocked = false 并重试)
+    //             WakeupIngress(curr);
+
+    //             // 4. 找到一个接盘侠就退出，保证一次只放进来一个 HEAD
+    //             return;
+    //         } else {
+    //             // 异常情况：它在名单里，但队列空了？可能是之前的逻辑 bug
+    //             // 顺手清理掉
+    //             m_waitingForLock[outDev].erase(curr);
+    //         }
+    //     }
+
+        
+    //     curr = (curr + 1) % m_activePortCnt;
+    // }
+    for (uint32_t i = 0; i < m_activePortCnt; i++) {
+        uint32_t curr = ((m_rrPtr[outDev] + i) % m_activePortCnt) + 1;  // +1 变成 1-based
+        if (m_waitingForLock[outDev].count(curr)) {
+            if (!m_ingressQueues[curr].empty()) {
                 m_waitingForLock[outDev].erase(curr);
-
-                // 2. 更新轮询指针 (公平性)
                 m_rrPtr[outDev] = curr;
-
-                // 3. 唤醒！(它会重置 blocked = false 并重试)
                 WakeupIngress(curr);
-
-                // 4. 找到一个接盘侠就退出，保证一次只放进来一个 HEAD
                 return;
             } else {
-                // 异常情况：它在名单里，但队列空了？可能是之前的逻辑 bug
-                // 顺手清理掉
                 m_waitingForLock[outDev].erase(curr);
             }
         }
-
-        
-        curr = (curr + 1) % m_activePortCnt;
     }
 }
 

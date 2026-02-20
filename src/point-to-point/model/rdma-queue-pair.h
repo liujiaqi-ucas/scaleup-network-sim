@@ -81,6 +81,7 @@ class RdmaRxQueuePair : public Object {  // Rx side queue pair
     uint16_t m_ipid;
     int32_t m_flow_id;
    uint32_t expected_seq; // 期望收到的下一个序号
+   bool m_finished = false;  // 是否已触发完成回调
     // ==========================================
     // 【新增】存储流的总大小
     // ==========================================
