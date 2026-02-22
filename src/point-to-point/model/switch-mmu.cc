@@ -61,6 +61,7 @@ void SwitchMmu::RegisterWaitSpace(uint32_t outDev, uint32_t inDev) {
 void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
     // 记录：inDev 正在等待 outDev 的空间
     m_waitingForLock[outDev].insert(inDev);
+    std::cout << "RegisterWaitPort: inDev " << inDev << " is waiting for outDev " << outDev << std::endl;
 }
 // void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {//这个函数就完全不用了
 //     uint32_t psize = p->GetSize();
@@ -96,6 +97,7 @@ void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
 
 
 void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
+    std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 进入ArbitrateAndSend函数了"<<std::endl;
     //这里应该加一个判断判断当前满不满足重排序缓冲区的转发条件，在这里直接就卡住就行，后面应该都不用变，后面把ingress这个队列，换成device里面的那个ingress队列就行
      if(!m_node->cantransmit(inDev)){
          std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 重排序缓冲区不满足转发条件，先别转发了"<<std::endl;
@@ -121,8 +123,14 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             // A. 发送成功
             // ----------------------------------------------------
             //物理出队
-            qbbDev->m_rxBuffer->ClearEntry(qbbDev->m_forwardNext);//清理槽位
+            //qbbDev->m_rxBuffer->ClearEntry(qbbDev->m_forwardNext);//清理槽位
+            qbbDev->m_rxBuffer->CommitHead();
             qbbDev->m_forwardNext=(qbbDev->m_forwardNext+1)%MAX_SN;//更新转发指针
+            // 在 ArbitrateAndSend 的 CommitHead 前后：
+           std::cout << "ArbitrateAndSend: m_rxBuffer地址=" << qbbDev->m_rxBuffer << std::endl;
+            std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 转发了一个flit，清理槽位成功现在rxbuffer打印一下"<<std::endl;
+            qbbDev->m_rxBuffer->PrintDebugState();
+             // 既然发成功了，blocked 肯定是 false
             //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false
             m_ingressBlocked[inDev] = false; 
@@ -155,10 +163,12 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
 void SwitchMmu::WakeupIngress(uint32_t inDev) {
     // 只有当前确实是阻塞状态才唤醒
     // 否则可能是重复唤醒，或者该端口根本没货
+    std::cout<<"我现在进入WakeupIngress函数了，准备唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
     if (m_ingressBlocked[inDev]) {
         // 先解除封印
         m_ingressBlocked[inDev] = false;
         // 立即重试
+        std::cout<<"我现在要唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
         Simulator::ScheduleNow(&SwitchMmu::ArbitrateAndSend, this, inDev);
     }
 }
@@ -166,42 +176,26 @@ void SwitchMmu::WakeupIngress(uint32_t inDev) {
 
 void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
     // Round-Robin 轮询：从上次服务位置的下一个开始查
-    uint32_t start = (m_rrPtr[outDev] + 1) % m_activePortCnt;
-    uint32_t curr = start;
-
-    for (uint32_t i = 1; i <= m_activePortCnt; i++) {
-        // 1. 如果这个入端口有包在排队
-        // 【关键改进】先检查：这个入端口是否真的在等待这个出端口的锁？
-        // 这样就避免了误唤醒那些等待 Credit 的人，或者刚来的人。
-        // m_waitingForLock 是 std::set，count 很快
+    
+    for (uint32_t i = 0; i < m_activePortCnt; i++) {
+        uint32_t curr = ((m_rrPtr[outDev] + i) % m_activePortCnt) + 1;  // +1 变成 1-based
         if (m_waitingForLock[outDev].count(curr)) {
             Ptr<NetDevice> baseDev = m_node->GetDevice(curr);
-            Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
-            // 双重保险：检查队列是否非空
+             Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
             if (!qbbDev->m_rxBuffer->IsEmpty()) {
-                 
-                
-                // 1. 移除等待名单 (必须先做)
+            
                 m_waitingForLock[outDev].erase(curr);
-
-                // 2. 更新轮询指针 (公平性)
                 m_rrPtr[outDev] = curr;
-
-                // 3. 唤醒！(它会重置 blocked = false 并重试)
+                std::cout<<"NotifyOutputPortFree: outDev " << outDev << " is now free, waking up inDev " << curr << std::endl;
                 WakeupIngress(curr);
-
-                // 4. 找到一个接盘侠就退出，保证一次只放进来一个 HEAD
+                std::cout<<"wakeup  执行成功了？"<<std::endl;
                 return;
             } else {
-                // 异常情况：它在名单里，但队列空了？可能是之前的逻辑 bug
-                // 顺手清理掉
                 m_waitingForLock[outDev].erase(curr);
             }
         }
-
-        
-        curr = (curr + 1) % m_activePortCnt;
     }
+    std::cout<<"没有找到等待outDev "<<outDev<<"的inDev，继续保持空闲状态"<<std::endl;
 }
 
 

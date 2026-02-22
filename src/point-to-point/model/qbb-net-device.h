@@ -96,13 +96,14 @@ public:
   static const uint32_t maxHop = 1; // Max hop count in the network. should not exceed 16 
   //*******************************发送端要维护的变量**********************************************/
   void ReloadRetransQueue(uint16_t start_seq);// 辅助函数：清空并重新填装重传队列
-  void PrintBitmap(uint32_t bitmap);
+  void PrintBitmap(uint64_t high, uint64_t low);
   // 职责：打上序号 + 存入重传缓冲区
     void PrepareNewPacket(Ptr<Packet> p);
     // 参数 is_nack: true 发 NACK, false 发 ACK (一般用于重复包的立即重确认)
 // 参数 seq: 期望收到的序号 (对于 NACK) 或 确认序号 (对于 ACK)
 void SendControlFlit(bool is_nack, uint16_t seq);
-void processnak(uint16_t firstMissing, uint32_t bitmap);//处理收到的nak的函数
+//void processnak(uint16_t firstMissing, uint32_t bitmap);//处理收到的nak的函数
+void processnak(uint16_t firstMissing, uint64_t bitmapHigh, uint64_t bitmapLow); // 改为128位
 void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
  //uint16_t m_next_seq_num;//下一个要分配的flit的序号
  uint16_t m_last_acked_seq;//最后一个被接收端ack的flit序号，也就是发送窗口左边界的上一个序号
@@ -203,9 +204,13 @@ void ProcessAck(uint16_t ack_seq);//处理收到的ack的函数
     Time m_lastNackTime;   // 上次发送 NACK 的时刻
     Time m_nackCooldown;   // 冷却时间间隔 (通常设置为 1个 RTT)
 
-    bool nakflag;//表示当前有nak要发送
-    uint16_t nakseq;//表示当前要发送的nak序号
-    uint32_t nakbitmap;//表示当前要发送的nak位图
+    // bool nakflag;//表示当前有nak要发送
+    // uint16_t nakseq;//表示当前要发送的nak序号
+    // uint32_t nakbitmap;//表示当前要发送的nak位图
+    bool nakflag;
+    uint16_t nakseq;
+    uint64_t nakbitmapHigh;  // 替换原来的 uint32_t nakbitmap
+    uint64_t nakbitmapLow;
      void UpdateRtoTimer();
      void HandleRtoTimeout ();
      Time m_rtoBase;  // 必须在这里
@@ -330,7 +335,7 @@ public:
 	void RdmaEnqueueHighPrioQ(Ptr<Packet> p);
 
 	// callback for processing packet in RDMA
-	typedef Callback<int, Ptr<Packet>, CustomHeader&> RdmaReceiveCb;
+	typedef Callback<int, Ptr<Packet>, CustomHeader&,uint32_t> RdmaReceiveCb;
 	RdmaReceiveCb m_rdmaReceiveCb;
 	// callback for link down
 	typedef Callback<void, Ptr<QbbNetDevice> > RdmaLinkDownCb;

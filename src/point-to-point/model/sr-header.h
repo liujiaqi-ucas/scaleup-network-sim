@@ -64,9 +64,15 @@ public:
   void SetFirstMissing (uint16_t sn);
   uint16_t GetFirstMissing (void) const;
 
-  // 设置/获取 Bitmap
-  void SetBitmap (uint32_t bitmap);
-  uint32_t GetBitmap (void) const;
+  
+  // 设置/获取 Bitmap (128bit，分高64位和低64位)
+  void SetBitmap (uint64_t high, uint64_t low);
+  uint64_t GetBitmapHigh (void) const;
+  uint64_t GetBitmapLow (void) const;
+// 按位操作辅助方法
+  void SetBit (uint8_t pos);    // 设置第 pos 位 (0~127)
+  void ClearBit (uint8_t pos);  // 清除第 pos 位
+  bool TestBit (uint8_t pos) const; // 测试第 pos 位
 
   // NS-3 Header 标准接口
   static TypeId GetTypeId (void);
@@ -78,7 +84,9 @@ public:
 
 private:
   uint16_t m_firstMissing; // 基准序列号
-  uint32_t m_bitmap;       // 相对位图
+  //uint32_t m_bitmap;       // 相对位图
+  uint64_t m_bitmapHigh;   // 位图高 64 位 (bit 64~127)
+  uint64_t m_bitmapLow;    // 位图低 64 位 (bit 0~63)
 };
 
 } // namespace ns3

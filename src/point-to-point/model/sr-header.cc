@@ -87,7 +87,8 @@ CommonHeader::GetFlitType (void) const
 
 NackHeader::NackHeader () 
   : m_firstMissing (0), 
-    m_bitmap (0) 
+    m_bitmapHigh (0),
+    m_bitmapLow (0)
 {
 }
 
@@ -112,14 +113,15 @@ void
 NackHeader::Print (std::ostream &os) const
 {
   os << "NACK: FirstMissing=" << m_firstMissing 
-     << " Bitmap=0x" << std::hex << m_bitmap << std::dec;
+     << " Bitmap=0x" << std::hex << m_bitmapHigh 
+     << m_bitmapLow << std::dec;
 }
 
 uint32_t
 NackHeader::GetSerializedSize (void) const
 {
   // 2字节 (FirstMissing) + 4字节 (Bitmap) = 6字节
-  return 6;
+  return 18;
 }
 
 void
@@ -127,7 +129,8 @@ NackHeader::Serialize (Buffer::Iterator start) const
 {
   // 使用网络字节序写入
   start.WriteHtonU16 (m_firstMissing);
-  start.WriteHtonU32 (m_bitmap);
+  start.WriteHtonU64 (m_bitmapHigh);
+  start.WriteHtonU64 (m_bitmapLow);
 }
 
 uint32_t
@@ -135,7 +138,8 @@ NackHeader::Deserialize (Buffer::Iterator start)
 {
   // 使用网络字节序读取
   m_firstMissing = start.ReadNtohU16 ();
-  m_bitmap = start.ReadNtohU32 ();
+  m_bitmapHigh   = start.ReadNtohU64 ();
+  m_bitmapLow    = start.ReadNtohU64 ();
   return GetSerializedSize ();
 }
 
@@ -152,15 +156,50 @@ NackHeader::GetFirstMissing (void) const
 }
 
 void
-NackHeader::SetBitmap (uint32_t bitmap)
+NackHeader::SetBitmap (uint64_t high, uint64_t low)
 {
-  m_bitmap = bitmap;
+  m_bitmapHigh = high;
+  m_bitmapLow  = low;
 }
 
-uint32_t
-NackHeader::GetBitmap (void) const
+uint64_t
+NackHeader::GetBitmapHigh (void) const
 {
-  return m_bitmap;
+  return m_bitmapHigh;
 }
 
+uint64_t
+NackHeader::GetBitmapLow (void) const
+{
+  return m_bitmapLow;
+}
+void
+NackHeader::SetBit (uint8_t pos)
+{
+  NS_ASSERT (pos < 128);
+  if (pos < 64)
+    m_bitmapLow  |= (1ULL << pos);
+  else
+    m_bitmapHigh |= (1ULL << (pos - 64));
+}
+
+void
+NackHeader::ClearBit (uint8_t pos)
+{
+  NS_ASSERT (pos < 128);
+  if (pos < 64)
+    m_bitmapLow  &= ~(1ULL << pos);
+  else
+    m_bitmapHigh &= ~(1ULL << (pos - 64));
+}
+
+bool
+NackHeader::TestBit (uint8_t pos) const
+{
+  NS_ASSERT (pos < 128);
+  if (pos < 64)
+    return (m_bitmapLow  >> pos) & 1ULL;
+  else
+    return (m_bitmapHigh >> (pos - 64)) & 1ULL;
+}
 } // namespace ns3

@@ -132,7 +132,7 @@ TypeId RdmaHw::GetTypeId(void) {
 }
 
 RdmaHw::RdmaHw() {
-    m_currentRxQp = 0;
+    //m_currentRxQp = 0;
     
 }
 
@@ -296,7 +296,7 @@ void RdmaHw::DeleteRxQp(uint32_t dip, uint16_t dport, uint16_t sport, uint16_t p
     m_rxQpMap.erase(key);
 }
 
-int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
+int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     
     // 1. 获取 Flit 基础信息
     FlitHeader fh;
@@ -308,7 +308,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
     uint32_t rawPayloadSize = p->GetSize() - fh.GetSerializedSize();
 
     // 初始化 QP 指针
-    Ptr<RdmaRxQueuePair> rxQp = m_currentRxQp;
+    Ptr<RdmaRxQueuePair> rxQp = m_currentRxQpPerDev[dev_idx];
     uint32_t nodeId = m_node->GetId();
 
     // =========================================================
@@ -352,7 +352,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
         p->AddHeader(fh); 
 
         // 更新缓存
-        m_currentRxQp = rxQp;
+        m_currentRxQpPerDev[dev_idx] = rxQp;
     }
 
     
@@ -404,8 +404,10 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
 
      // 累加到 QP 中
     rxQp->received_bytes += effectiveDataBytes;
-    
-    std::cout << "  我是Node " << (int)type << "包，Node " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
+    uint32_t srcId = Settings::ip_to_node_id(Ipv4Address(rxQp->sip));
+    uint32_t dstId = Settings::ip_to_node_id(Ipv4Address(rxQp->dip));
+    std::cout << "  我是Node  " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
+    <<" 我的流是从 "<<srcId<<" 发来的，发往 "<<dstId
               << " Raw: " << rawPayloadSize 
               << " Effective: " << effectiveDataBytes 
               << " TotalRecv: " << rxQp->received_bytes 
@@ -526,13 +528,14 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch) {
     // return 0;
     
 }
-int RdmaHw::Receive(Ptr<Packet> p, CustomHeader &ch) {
+
+int RdmaHw::Receive(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     // #if (SLB_DEBUG == true)
     //     std::cout << "[RdmaHw::Receive] Node(" << m_node->GetId() << ")," << PARSE_FIVE_TUPLE(ch)
     //     << "l3Prot:" << ch.l3Prot << ",at" << Simulator::Now() << std::endl;
     // #endif
     //if (ch.l3Prot == 0x11) {  // UDP
-        return ReceiveUdp(p, ch);
+        return ReceiveUdp(p, ch, dev_idx);
     //} 
     
     return 0;
