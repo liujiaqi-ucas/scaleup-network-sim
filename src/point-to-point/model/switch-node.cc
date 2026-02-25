@@ -113,9 +113,9 @@ uint32_t SwitchNode::DoLbFlowECMP(Ptr<const Packet> p, const CustomHeader &ch,
     else if (ch.l3Prot == 0xFC || ch.l3Prot == 0xFD)  // ACK or NACK
         buf.u32[2] = ch.ack.sport | ((uint32_t)ch.ack.dport << 16);
     else {
-        std::cout << "[ERROR] Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
-                  << "Cannot support other protoocls than TCP/UDP (l3Prot:" << ch.l3Prot << ")"
-                  << std::endl;
+        //std::cout << "[ERROR] Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
+                 // << "Cannot support other protoocls than TCP/UDP (l3Prot:" << ch.l3Prot << ")"
+                 //<< std::endl;
         assert(false && "Cannot support other protoocls than TCP/UDP");
     }
 
@@ -207,8 +207,8 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     uint32_t outDev = -1;
     // 【调试日志】
     if (type == 0 || type == 3) {
-        std::cout << "[DEBUG] Head/Single Pkt at Node " << GetId() 
-                  << " inDev " << inDev << " Type=" << type << std::endl;
+        //std::cout << "[DEBUG] Head/Single Pkt at Node " << GetId() 
+                  //<< " inDev " << inDev << " Type=" << type << std::endl;
     }
     // 2. 确定出端口
     if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {

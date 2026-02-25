@@ -41,9 +41,9 @@ bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
     // 用有符号距离判断：dist > 0 表示 sn 在 m_head 之后
     int distFromHead = (int)(sn - m_head);
     if (distFromHead < 0 || distFromHead >= (int)m_size) {
-        std::cout << "StorePacket: SN=" << sn
-                    << " 超出窗口 [" << m_head
-                    << ", " << (uint16_t)(m_head + m_size) << ")，丢弃" << std::endl;
+        //std::cout << "StorePacket: SN=" << sn
+                    //<< " 超出窗口 [" << m_head
+                    //<< ", " << (uint16_t)(m_head + m_size) << ")，丢弃" << std::endl;
         return false;
     }
 
@@ -51,16 +51,16 @@ bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
 
     // ---- 2. 重复检查 ----
     if (m_buffer[idx].occupied && m_buffer[idx].storedSn == sn) {
-        std::cout << "StorePacket: SN=" << sn << " 重复收到，忽略" << std::endl;
+        //std::cout << "StorePacket: SN=" << sn << " 重复收到，忽略" << std::endl;
         return false;
     }
 
     // ---- 3. 槽位冲突检查（流控失效时的保护） ----
     if (m_buffer[idx].occupied && m_buffer[idx].storedSn != sn) {
-        std::cout << "StorePacket: 槽位冲突！idx=" << idx
-                     << " 已有 SN=" << m_buffer[idx].storedSn
-                     << " 但试图写入 SN=" << sn
-                     << " —— 流控可能失效" << std::endl;
+        //std::cout << "StorePacket: 槽位冲突！idx=" << idx
+                     //<< " 已有 SN=" << m_buffer[idx].storedSn
+                     //<< " 但试图写入 SN=" << sn
+                     //<< " —— 流控可能失效" << std::endl;
         return false;
     }
 
@@ -73,18 +73,18 @@ bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
     // ---- 5. 更新尾指针（保持 m_tail = max已收SN + 1） ----
     // 如果新 sn 比当前 m_tail 更靠后，推进 m_tail
     int distFromTail = (int)(sn - m_tail);
-    std::cout << "  [TAIL更新检查] sn=" << sn 
-              << " m_tail(更新前)=" << m_tail 
-              << " distFromTail=" << distFromTail;
+    // std::cout << "  [TAIL更新检查] sn=" << sn 
+              //<< " m_tail(更新前)=" << m_tail 
+             // << " distFromTail=" << distFromTail;
     if (distFromTail >= 0) {
         m_tail = (uint16_t)(sn + 1);
-        std::cout << " → m_tail(更新后)=" << m_tail;
+        //std::cout << " → m_tail(更新后)=" << m_tail;
     } else {
-        std::cout << " → 未更新(distFromTail<0)";
+        //std::cout << " → 未更新(distFromTail<0)";
     }
 
-    std::cout << "StorePacket: SN=" << sn << " idx=" << idx
-              << " count=" << m_count << std::endl;
+    //std::cout << "StorePacket: SN=" << sn << " idx=" << idx
+              //<< " count=" << m_count << std::endl;
     return true;
 }
 
@@ -119,8 +119,8 @@ uint16_t RxBuffer::CommitHead()
     m_count--;
     m_head = (uint16_t)(m_head + 1); // 推进头指针（自动回绕）
 
-    std::cout << "CommitHead: committed SN=" << committed
-              << " new head=" << m_head << std::endl;
+    //std::cout << "CommitHead: committed SN=" << committed
+              //<< " new head=" << m_head << std::endl;
     return committed;
 }
 

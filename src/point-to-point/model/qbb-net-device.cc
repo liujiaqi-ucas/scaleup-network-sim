@@ -1509,10 +1509,10 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     int cotype=co.GetFlitType();
         m_phyRxDropTrace(packet);
         if(cotype==0){
-        //std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<" 丢了一个不是nak包 "<<std::endl;  // 丢弃包的时候打印一下日志 
+        std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<" 丢了一个不是nak包 "<<std::endl;  // 丢弃包的时候打印一下日志 
                   
         }else{
-        //std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"丢了一个nak包了"<<std::endl;  // 丢弃包的时候打印一下日志
+        std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"丢了一个nak包了"<<std::endl;  // 丢弃包的时候打印一下日志
         }
         return;
     }
@@ -1636,7 +1636,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         m_rxBuffer->StorePacket(seq, packet);
         // 在 Receive 的 StorePacket 前后：
         //std::cout << "Receive: m_rxBuffer地址=" << m_rxBuffer << std::endl;
-        m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
+        //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
         // 3. 状态更新与触发
         if (seq == m_rxNext) {
             // [填坑成功]
@@ -1683,16 +1683,16 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         uint16_t dist = (seq - m_rxNext + MAX_SN) % MAX_SN;
         //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包的seq是"<<seq<<"，目前期待的seq是"<<m_rxNext<<"，距离是"<<dist<<std::endl;
         if (dist >= MAX_SN / 2) {
-            std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
+            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
             TriggerAck(0, m_rxNext);
             return;} // 过期
         if (dist >= m_bufferSize) 
         {
-            std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
+            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
             return; // 溢出
             }
         if (m_rxBuffer->IsReceived(seq)) 
-        {   std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
+        {   //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
             return; // 重复
             }
 
@@ -1789,11 +1789,11 @@ bool QbbNetDevice::TransmitStart(Ptr<Packet> p) {
     CommonHeader co;
     p->PeekHeader(co);
     if (co.GetFlitType() == 0) { // 数据flit才能捎带
-        std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"发的包是一个数据包，可以捎带ack和credit"<<std::endl;
+        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"发的包是一个数据包，可以捎带ack和credit"<<std::endl;
         PiggybackAck(p);
         piggycredit(p);
     }else{
-        std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"发的包是一个nak包，不能捎带ack和credit"<<std::endl;
+        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"发的包是一个nak包，不能捎带ack和credit"<<std::endl;
     }
     //要是单nak的话直接发就行，不用捎带什么的
     m_txMachineState = BUSY;

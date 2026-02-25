@@ -166,7 +166,7 @@ uint32_t RdmaHw::GetNicIdxOfQp(Ptr<RdmaQueuePair> qp) {
         return v[qp->GetHash() % v.size()];
     }
     NS_ASSERT_MSG(false, "We assume at least one NIC is alive");
-    std::cout << "We assume at least one NIC is alive" << std::endl;
+    //std::cout << "We assume at least one NIC is alive" << std::endl;
     exit(1);
 }
 
@@ -330,7 +330,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
                 exit(1);
             }
         }
-        std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
+        //std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
     if (ch.udp.seq != rxQp->expected_seq) { // 校验序号
         //报错，这是不正常的，说明机制有问题
         printf("ERROR: UDP NIC received out-of-order flit seq %u, expected %u\n",
@@ -406,12 +406,12 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     rxQp->received_bytes += effectiveDataBytes;
     uint32_t srcId = Settings::ip_to_node_id(Ipv4Address(rxQp->sip));
     uint32_t dstId = Settings::ip_to_node_id(Ipv4Address(rxQp->dip));
-    std::cout << "  我是Node  " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
-    <<" 我的流是从 "<<srcId<<" 发来的，发往 "<<dstId
-              << " Raw: " << rawPayloadSize 
-              << " Effective: " << effectiveDataBytes 
-              << " TotalRecv: " << rxQp->received_bytes 
-              << " / Target: " << rxQp->m_size << std::endl;
+    //std::cout << "  我是Node  " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
+    //<<" 我的流是从 "<<srcId<<" 发来的，发往 "<<dstId
+              //<< " Raw: " << rawPayloadSize 
+              //<< " Effective: " << effectiveDataBytes 
+              //<< " TotalRecv: " << rxQp->received_bytes 
+              //<< " / Target: " << rxQp->m_size << std::endl;
 
     // =========================================================
     // 阶段 E: 流结束判断 (Finish Check)
@@ -611,7 +611,7 @@ Ptr<Packet> RdmaHw::GetNxtPacket(Ptr<RdmaQueuePair> qp) {
     if (m_mtu < payload_size) {  // possibly last packet
         payload_size = m_mtu;
     }
-    std::cout<<"MTU="<<m_mtu<<std::endl;
+    //std::cout<<"MTU="<<m_mtu<<std::endl;
     uint32_t seq = (uint32_t)qp->snd_nxt;//一定要确保snd_nxt这个正常更新
     bool proceed_snd_nxt = true;
     qp->stat.txTotalPkts += 1;

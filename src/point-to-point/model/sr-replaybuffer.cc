@@ -104,7 +104,7 @@ ReplayBuffer::FreeSlots(uint16_t oldUna, uint16_t newTxUna)
         m_buffer[idx].isRetransmitting = false;   // ← 新增
         m_buffer[idx].retxCount = 0;              // ← 新增
         m_buffer[idx].lastSentTime = Seconds(0);  // ← 新增
-        std::cout<<"清理了SN="<<current<<"所在的槽位,idx="<<idx<<std::endl;
+        //std::cout<<"清理了SN="<<current<<"所在的槽位,idx="<<idx<<std::endl;
         // 处理序号回绕 (Wrap-around)
         current = (current + 1) % MAX_SN;
     }

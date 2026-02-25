@@ -97,10 +97,10 @@ void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
 
 
 void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
-    std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 进入ArbitrateAndSend函数了"<<std::endl;
+    //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 进入ArbitrateAndSend函数了"<<std::endl;
     //这里应该加一个判断判断当前满不满足重排序缓冲区的转发条件，在这里直接就卡住就行，后面应该都不用变，后面把ingress这个队列，换成device里面的那个ingress队列就行
      if(!m_node->cantransmit(inDev)){
-         std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 重排序缓冲区不满足转发条件，先别转发了"<<std::endl;
+         //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 重排序缓冲区不满足转发条件，先别转发了"<<std::endl;
          return;
      }
     
@@ -129,7 +129,7 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             // 在 ArbitrateAndSend 的 CommitHead 前后：
            //std::cout << "ArbitrateAndSend: m_rxBuffer地址=" << qbbDev->m_rxBuffer << std::endl;
             //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 转发了一个flit，清理槽位成功现在rxbuffer打印一下"<<std::endl;
-            qbbDev->m_rxBuffer->PrintDebugState();
+            //qbbDev->m_rxBuffer->PrintDebugState();
              // 既然发成功了，blocked 肯定是 false
             //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false
