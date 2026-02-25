@@ -40,7 +40,7 @@
 #include "sr-replaybuffer.h"
 #include"flow-stat-tag.h"
 #define MAX_SN 65536//序号空间
-#define m_bufferSize 512//重传缓冲区的空间
+#define m_bufferSize 40000//重传缓冲区的空间
 #define m_rttEstimate 5000//这个是冷却时间,单位是ns
 namespace ns3 {
 inline int SeqDist(uint16_t seq1, uint16_t seq2) {

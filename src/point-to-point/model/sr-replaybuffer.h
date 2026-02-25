@@ -18,13 +18,15 @@ namespace ns3 {
  */
 struct ReplayEntry {
     Ptr<Packet> flit;
-    bool isAcked;
-    bool isRetransmitting;
-    Time lastSentTime;
+    uint16_t sn;
+    bool isAcked;//该包是否已经被确认
+    bool isRetransmitting;//该包现在是否在重传队列里面
+    Time lastSentTime;//上次发送时间
     uint8_t retxCount; // <--- 【新增】记录重传次数
 
     ReplayEntry() 
         : flit(nullptr), 
+        sn(UINT16_MAX),
           isAcked(true), 
           isRetransmitting(false), 
           lastSentTime(Seconds(0)),
@@ -95,6 +97,12 @@ public:
      * @brief 更新上次发送时间为当前时间 (Simulator::Now)
      */
     void UpdateLastSentTime(uint16_t sn);
+    /**
+     * @brief 打印重传缓冲区中所有非空槽位的状态（调试用）
+     * @param nodeId   节点 ID（方便区分不同节点的输出）
+     * @param ifIndex  端口编号
+     */
+    void PrintBuffer(uint32_t nodeId, uint32_t ifIndex) const;
 
 private:
     /**

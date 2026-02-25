@@ -322,6 +322,9 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
             m_mmu->RegisterWaitPort(outDev, inDev);
             m_mmu->m_ingressBlocked[inDev] = true;
             std::cout<<"虽然我是tail/single，但这个端口还有数据，所以我继续注册等待锁"<<std::endl;
+        }else{
+            m_mmu->m_ingressBlocked[inDev] = false;
+           std::cout<<"我是tail/single，这个端口暂时没有数据了，所以我不注册等待锁了"<<std::endl;
         }
         m_portOccupancy[outDev] = -1; // 解锁
         m_connectionTable[inDev].isValid = false;

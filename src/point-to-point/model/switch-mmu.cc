@@ -133,7 +133,7 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
              // 既然发成功了，blocked 肯定是 false
             //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false
-            m_ingressBlocked[inDev] = false; 
+            //m_ingressBlocked[inDev] = false; 
 
             // 处理连续发送逻辑
             if (type == 2 /*TAIL*/ || type == 3 /*SINGLE*/) {
@@ -176,7 +176,11 @@ void SwitchMmu::WakeupIngress(uint32_t inDev) {
 
 void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
     // Round-Robin 轮询：从上次服务位置的下一个开始查
-    
+    std::cout<<"目前要通知switch "<<m_node->GetId()<<"的device "<<outDev<<" 现在空闲了，等待这个端口的inDev分别是 ";
+    for(const auto& inDev : m_waitingForLock[outDev]) {
+        std::cout << inDev << " ";
+    }
+    std::cout << std::endl;
     for (uint32_t i = 0; i < m_activePortCnt; i++) {
         uint32_t curr = ((m_rrPtr[outDev] + i) % m_activePortCnt) + 1;  // +1 变成 1-based
         if (m_waitingForLock[outDev].count(curr)) {
@@ -188,7 +192,7 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
                 m_rrPtr[outDev] = curr;
                 std::cout<<"NotifyOutputPortFree: outDev " << outDev << " is now free, waking up inDev " << curr << std::endl;
                 WakeupIngress(curr);
-                std::cout<<"wakeup  执行成功了？"<<std::endl;
+                //std::cout<<"wakeup  执行成功了？"<<std::endl;
                 return;
             } else {
                 m_waitingForLock[outDev].erase(curr);

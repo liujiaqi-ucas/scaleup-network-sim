@@ -1,7 +1,7 @@
 #include "sr-replaybuffer.h"
 #include "ns3/log.h"
 #include <iostream> // 用于 std::cout
-
+#include <iomanip>
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE("ReplayBuffer");
@@ -43,6 +43,7 @@ ReplayBuffer::AddNewPacket(uint16_t sn, Ptr<Packet> flit)
 
     // 重置该条目的状态
     m_buffer[idx].flit = flit;              // 存入数据包（副本）
+    m_buffer[idx].sn = sn;
     m_buffer[idx].isAcked = false;          // 标记为“等待确认”
     m_buffer[idx].isRetransmitting = false; // 初始状态：不在重传队列中
     m_buffer[idx].lastSentTime = Simulator::Now(); // 记录当前的发送时间
@@ -59,7 +60,12 @@ void
 ReplayBuffer::MarkAcked(uint16_t sn) 
 {
     uint16_t idx = GetIndex(sn);
-    
+    // ← 新增：SN 校验，防止误确认不同 SN 映射到同一 idx 的包
+    if (m_buffer[idx].sn != sn) {
+        NS_LOG_WARN("MarkAcked: SN mismatch! Expected " << sn 
+                     << " but slot has " << m_buffer[idx].sn);
+        return;
+    }
     if (m_buffer[idx].isAcked) {
         return; // 如果已经确认过了，直接返回
     }
@@ -91,10 +97,14 @@ ReplayBuffer::FreeSlots(uint16_t oldUna, uint16_t newTxUna)
             //std::cout << "ReplayBuffer [清理]: 清空 Vector 下标=" << idx << " (原 SN=" << current << ")" << std::endl;
         }
 
-        // 清理内存
-        m_buffer[idx].flit = nullptr;   // 释放 Packet 指针
-        m_buffer[idx].isAcked = true;   // 恢复为默认安全状态 (已确认/空闲)
-        
+         // 【新增】完整清理所有字段
+        m_buffer[idx].flit = nullptr;
+        m_buffer[idx].sn = UINT16_MAX;           // ← 新增
+        m_buffer[idx].isAcked = true;
+        m_buffer[idx].isRetransmitting = false;   // ← 新增
+        m_buffer[idx].retxCount = 0;              // ← 新增
+        m_buffer[idx].lastSentTime = Seconds(0);  // ← 新增
+        std::cout<<"清理了SN="<<current<<"所在的槽位,idx="<<idx<<std::endl;
         // 处理序号回绕 (Wrap-around)
         current = (current + 1) % MAX_SN;
     }
@@ -104,26 +114,38 @@ ReplayBuffer::FreeSlots(uint16_t oldUna, uint16_t newTxUna)
 Ptr<Packet> 
 ReplayBuffer::GetFlit(uint16_t sn) 
 {
-    uint16_t idx = GetIndex(sn);
-    Ptr<Packet> p = m_buffer[idx].flit;
-    
-    // 【调试打印】：取包时打印地址，检查是否为空
-    // std::cout << "DEBUG: GetFlit SN=" << sn << " Idx=" << idx << " Ptr=" << p << std::endl;
-    
-    return p;
+   uint16_t idx = GetIndex(sn);
+    // ← 新增：SN 校验
+    if (m_buffer[idx].sn != sn) {
+        NS_LOG_WARN("GetFlit: SN mismatch! slot has " << m_buffer[idx].sn 
+                     << " but requested " << sn);
+        return nullptr;
+    }
+    return m_buffer[idx].flit;
 }
 
 // 查询状态：是否已确认
 bool 
 ReplayBuffer::IsAcked(uint16_t sn) 
 {
-    return m_buffer[GetIndex(sn)].isAcked;
+     uint16_t idx = GetIndex(sn);
+    // ← 新增：如果 SN 不匹配，说明这个槽位已经被其他 SN 覆盖了
+    // 原来的包已经被 FreeSlots 清理，等价于"已确认"
+    if (m_buffer[idx].sn != sn) {
+        return true;
+    }
+    return m_buffer[idx].isAcked;
 }
 
 // 查询状态：是否正在重传中
 bool 
 ReplayBuffer::IsRetransmitting(uint16_t sn) 
 {
+    uint16_t idx = GetIndex(sn);
+     // ← 新增：SN 不匹配时，槽位属于其他包，当前 SN 不在重传中
+    if (m_buffer[idx].sn != sn) {
+        return false;
+    }
     return m_buffer[GetIndex(sn)].isRetransmitting;
 }
 
@@ -131,14 +153,26 @@ ReplayBuffer::IsRetransmitting(uint16_t sn)
 void 
 ReplayBuffer::SetRetransmitting(uint16_t sn, bool val) 
 {
-    m_buffer[GetIndex(sn)].isRetransmitting = val;
+    uint16_t idx = GetIndex(sn);
+    // ← 新增：SN 校验
+    if (m_buffer[idx].sn != sn) {
+        NS_LOG_WARN("SetRetransmitting: SN mismatch! slot has " << m_buffer[idx].sn 
+                     << " but requested " << sn);
+        return;
+    }
+    m_buffer[idx].isRetransmitting = val;
 }
 
 // 获取上次发送时间
 Time 
 ReplayBuffer::GetLastSentTime(uint16_t sn) 
 {
-    return m_buffer[GetIndex(sn)].lastSentTime;
+     uint16_t idx = GetIndex(sn);
+    // ← 新增：SN 不匹配时返回远古时间，不会触发冷却
+    if (m_buffer[idx].sn != sn) {
+        return Seconds(0);
+    }
+    return m_buffer[idx].lastSentTime;
 }
 
 // 更新上次发送时间
@@ -146,13 +180,80 @@ void
 ReplayBuffer::UpdateLastSentTime(uint16_t sn) 
 {
    uint16_t idx = GetIndex(sn);
+   // ← 新增：SN 校验
+    if (m_buffer[idx].sn != sn) {
+        NS_LOG_WARN("UpdateLastSentTime: SN mismatch!");
+        return;
+    }
     m_buffer[idx].lastSentTime = Simulator::Now();
     m_buffer[idx].retxCount++; // <--- 【新增】每次更新时间（意味着重传了一次），计数+1
 }
 uint8_t 
 ReplayBuffer::GetRetxCount(uint16_t sn) 
 {
-    return m_buffer[GetIndex(sn)].retxCount;
+     uint16_t idx = GetIndex(sn);
+    // ← 新增：SN 不匹配返回 0
+    if (m_buffer[idx].sn != sn) {
+        return 0;
+    }
+    return m_buffer[idx].retxCount;
 }
+void 
+ReplayBuffer::PrintBuffer(uint32_t nodeId, uint32_t ifIndex) const
+{
+    std::cout << "========== ReplayBuffer 状态 [Node=" << nodeId 
+              << " Dev=" << ifIndex 
+              << " Time=" << Simulator::Now().GetNanoSeconds() << "ns"
+              << " Size=" << m_size << "] ==========" << std::endl;
 
+    uint16_t occupied = 0;
+    uint16_t acked = 0;
+    uint16_t unacked = 0;
+    uint16_t retransmitting = 0;
+
+    std::cout << std::left
+              << std::setw(8)  << "Idx"
+              << std::setw(10) << "SN"
+              << std::setw(10) << "Acked"
+              << std::setw(10) << "Retxing"
+              << std::setw(8)  << "RetxCnt"
+              << std::setw(20) << "LastSentTime(ns)"
+              << std::setw(10) << "HasFlit"
+              << std::endl;
+
+    std::cout << std::string(76, '-') << std::endl;
+
+    for (uint16_t i = 0; i < m_size; ++i) {
+        const ReplayEntry& entry = m_buffer[i];
+
+        // 只打印非空槽位（SN 有效 或 flit 非空 或 未确认）
+        if (entry.sn == UINT16_MAX && entry.flit == nullptr && entry.isAcked) {
+            continue;  // 空槽位，跳过
+        }
+
+        occupied++;
+        if (entry.isAcked) acked++;
+        else unacked++;
+        if (entry.isRetransmitting) retransmitting++;
+
+        std::cout << std::left
+                  << std::setw(8)  << i
+                  << std::setw(10) << (entry.sn == UINT16_MAX ? "INVALID" : std::to_string(entry.sn))
+                  << std::setw(10) << (entry.isAcked ? "Y" : "N")
+                  << std::setw(10) << (entry.isRetransmitting ? "Y" : "N")
+                  << std::setw(8)  << (int)entry.retxCount
+                  << std::setw(20) << entry.lastSentTime.GetNanoSeconds()
+                  << std::setw(10) << (entry.flit != nullptr ? "Y" : "N")
+                  << std::endl;
+    }
+
+    std::cout << std::string(76, '-') << std::endl;
+    std::cout << "摘要: 占用=" << occupied 
+              << " 已确认=" << acked 
+              << " 未确认=" << unacked 
+              << " 重传中=" << retransmitting 
+              << " 空闲=" << (m_size - occupied) 
+              << std::endl;
+    std::cout << "==========================================" << std::endl;
+}
 } // namespace ns3

@@ -1443,6 +1443,7 @@ std::cout<<"333333333"<<std::endl;
     Ipv4AddressHelper ipv4;
     std::vector<std::pair<uint32_t, uint32_t>> link_pairs;  // src, dst link pairs
     //std::cout<<"4444444444444"<<std::endl;
+    int64_t current_stream_idx = 0;
     for (uint32_t i = 0; i < link_num; i++) {
         uint32_t src, dst;
         std::string data_rate, link_delay;
@@ -1463,7 +1464,7 @@ std::cout<<"333333333"<<std::endl;
             Ptr<RateErrorModel> rem = CreateObject<RateErrorModel>();
             Ptr<UniformRandomVariable> uv = CreateObject<UniformRandomVariable>();
             rem->SetRandomVariable(uv);
-            uv->SetStream(50);
+            uv->SetStream(current_stream_idx++);
             rem->SetAttribute("ErrorRate", DoubleValue(error_rate));
             rem->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_PACKET"));
             qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(rem));
