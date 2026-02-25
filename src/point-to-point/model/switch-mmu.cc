@@ -61,7 +61,7 @@ void SwitchMmu::RegisterWaitSpace(uint32_t outDev, uint32_t inDev) {
 void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
     // 记录：inDev 正在等待 outDev 的空间
     m_waitingForLock[outDev].insert(inDev);
-    std::cout << "RegisterWaitPort: inDev " << inDev << " is waiting for outDev " << outDev << std::endl;
+    //std::cout << "RegisterWaitPort: inDev " << inDev << " is waiting for outDev " << outDev << std::endl;
 }
 // void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {//这个函数就完全不用了
 //     uint32_t psize = p->GetSize();
@@ -127,8 +127,8 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             qbbDev->m_rxBuffer->CommitHead();
             qbbDev->m_forwardNext=(qbbDev->m_forwardNext+1)%MAX_SN;//更新转发指针
             // 在 ArbitrateAndSend 的 CommitHead 前后：
-           std::cout << "ArbitrateAndSend: m_rxBuffer地址=" << qbbDev->m_rxBuffer << std::endl;
-            std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 转发了一个flit，清理槽位成功现在rxbuffer打印一下"<<std::endl;
+           //std::cout << "ArbitrateAndSend: m_rxBuffer地址=" << qbbDev->m_rxBuffer << std::endl;
+            //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 转发了一个flit，清理槽位成功现在rxbuffer打印一下"<<std::endl;
             qbbDev->m_rxBuffer->PrintDebugState();
              // 既然发成功了，blocked 肯定是 false
             //release信用的过程在AttemptForward里面调用了
@@ -163,12 +163,12 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
 void SwitchMmu::WakeupIngress(uint32_t inDev) {
     // 只有当前确实是阻塞状态才唤醒
     // 否则可能是重复唤醒，或者该端口根本没货
-    std::cout<<"我现在进入WakeupIngress函数了，准备唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
+    //std::cout<<"我现在进入WakeupIngress函数了，准备唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
     if (m_ingressBlocked[inDev]) {
         // 先解除封印
         m_ingressBlocked[inDev] = false;
         // 立即重试
-        std::cout<<"我现在要唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
+        //std::cout<<"我现在要唤醒switch "<<m_node->GetId()<<"的device "<<inDev<<"了"<<std::endl;
         Simulator::ScheduleNow(&SwitchMmu::ArbitrateAndSend, this, inDev);
     }
 }
@@ -176,11 +176,11 @@ void SwitchMmu::WakeupIngress(uint32_t inDev) {
 
 void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
     // Round-Robin 轮询：从上次服务位置的下一个开始查
-    std::cout<<"目前要通知switch "<<m_node->GetId()<<"的device "<<outDev<<" 现在空闲了，等待这个端口的inDev分别是 ";
+    //std::cout<<"目前要通知switch "<<m_node->GetId()<<"的device "<<outDev<<" 现在空闲了，等待这个端口的inDev分别是 ";
     for(const auto& inDev : m_waitingForLock[outDev]) {
-        std::cout << inDev << " ";
+        //std::cout << inDev << " ";
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
     for (uint32_t i = 0; i < m_activePortCnt; i++) {
         uint32_t curr = ((m_rrPtr[outDev] + i) % m_activePortCnt) + 1;  // +1 变成 1-based
         if (m_waitingForLock[outDev].count(curr)) {
@@ -190,7 +190,7 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
             
                 m_waitingForLock[outDev].erase(curr);
                 m_rrPtr[outDev] = curr;
-                std::cout<<"NotifyOutputPortFree: outDev " << outDev << " is now free, waking up inDev " << curr << std::endl;
+                //std::cout<<"NotifyOutputPortFree: outDev " << outDev << " is now free, waking up inDev " << curr << std::endl;
                 WakeupIngress(curr);
                 //std::cout<<"wakeup  执行成功了？"<<std::endl;
                 return;
@@ -199,7 +199,7 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
             }
         }
     }
-    std::cout<<"没有找到等待outDev "<<outDev<<"的inDev，继续保持空闲状态"<<std::endl;
+    //std::cout<<"没有找到等待outDev "<<outDev<<"的inDev，继续保持空闲状态"<<std::endl;
 }
 
 
@@ -232,7 +232,7 @@ void SwitchMmu::InitSwitch(void) {
 }
 
 bool SwitchMmu::CheckIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize) {
-    std::cout<<"Node "<<m_node->GetId()<<" 现在检查进包m_usedIngressPGBytes[ "<<port<<"]的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
+    //std::cout<<"Node "<<m_node->GetId()<<" 现在检查进包m_usedIngressPGBytes[ "<<port<<"]的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
     // 【简单静态检查】
     if (m_usedIngressPGBytes[port][qIndex] + psize > m_staticQueueLimitBytes) {
         
@@ -246,7 +246,7 @@ bool SwitchMmu::CheckIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t p
 void SwitchMmu::UpdateIngressAdmission(uint32_t port, uint32_t qIndex, uint32_t psize) {
     
     m_usedIngressPGBytes[port][qIndex] += psize;
-    std::cout<<"Node "<<m_node->GetId()<<" 现在由于进包，更新后m_usedIngressPGBytes[ "<<port<<"]的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
+    //std::cout<<"Node "<<m_node->GetId()<<" 现在由于进包，更新后m_usedIngressPGBytes[ "<<port<<"]的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
     //m_usedTotalBytes += psize;
 }
 
@@ -254,7 +254,7 @@ void SwitchMmu::RemoveFromIngressAdmission(uint32_t port, uint32_t qIndex, uint3
     
     if (m_usedIngressPGBytes[port][qIndex] >= psize) {
         m_usedIngressPGBytes[port][qIndex] -= psize;
-        std::cout<<"Node "<<m_node->GetId()<<" 从ingress转发成功后，更新m_usedIngressPGBytes，现在port "<<port<<"的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
+        //std::cout<<"Node "<<m_node->GetId()<<" 从ingress转发成功后，更新m_usedIngressPGBytes，现在port "<<port<<"的值是"<<m_usedIngressPGBytes[port][qIndex]<<std::endl;
     } else {
         NS_LOG_WARN("Underflow in Ingress Bytes!");
         m_usedIngressPGBytes[port][qIndex] = 0;
@@ -265,7 +265,7 @@ void SwitchMmu::RemoveFromIngressAdmission(uint32_t port, uint32_t qIndex, uint3
 // 1. 准入检查：判断数组里的值是否超标
 bool SwitchMmu::CheckEgressAdmission(uint32_t port) {
     // 简单逻辑：剩余的信用大于1，代表有一个信用就行,
-    std::cout<<"switch Node "<<m_node->GetId()<<" device "<<port<<"的m_egressCredits["<<port<<"]是"<<m_egressCredits[port]<<std::endl;
+    //std::cout<<"switch Node "<<m_node->GetId()<<" device "<<port<<"的m_egressCredits["<<port<<"]是"<<m_egressCredits[port]<<std::endl;
     if (m_egressCredits[port] >=1) {
         return true;
     }

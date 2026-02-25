@@ -258,7 +258,7 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     // 如果我是 HEAD，且端口非空闲 -> 阻塞
     if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {
         if (!isPortFree) {
-            std::cout << "Switch " << GetId() << ": Port " << outDev << " locked by " << owner << ". InDev " << inDev << " blocked." << std::endl;
+            //std::cout << "Switch " << GetId() << ": Port " << outDev << " locked by " << owner << ". InDev " << inDev << " blocked." << std::endl;
             
             // 【关键修改】注册到“等待解锁”队列 (Wait for Lock)
             
@@ -270,7 +270,7 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     // 如果我是 BODY/TAIL，但我不是 Owner -> 严重错误 (逻辑不一致)
     else if (!isOwner) {
         // 这通常不应该发生，除非路由表变了或者状态乱了
-        std::cout << "CRITICAL ERROR: Body packet from " << inDev << " arrived but port " << outDev << " owned by " << owner << std::endl;
+        //std::cout << "CRITICAL ERROR: Body packet from " << inDev << " arrived but port " << outDev << " owned by " << owner << std::endl;
         exit(1); 
     }
 
@@ -279,7 +279,7 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     // ---------------------------------------------------------
     // 注意：即使拿到锁了，如果没有空间，也发不出去！
     if (!m_mmu->CheckEgressAdmission(outDev)) {
-        std::cout << "Switch " << GetId() << ": Port " << outDev << " buffer full. InDev " << inDev << " blocked." << std::endl;
+        //std::cout << "Switch " << GetId() << ": Port " << outDev << " buffer full. InDev " << inDev << " blocked." << std::endl;
         
         // 【保持原样】注册到“等待空间”队列 (Wait for Space)
         m_mmu->RegisterWaitSpace(outDev, inDev);
@@ -313,7 +313,7 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
     // 4. 物理发送
     CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
     m_devices[outDev]->SwitchSend(3, p, ch);
-    std::cout<<"switch   send!"<<std::endl;
+    //std::cout<<"switch   send!"<<std::endl;
     m_txBytes[outDev] += p->GetSize();
 
     // 5. 如果是 TAIL，解锁并唤醒等待锁的端口
@@ -321,10 +321,10 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
         if(!qbbDev->m_rxBuffer->IsEmpty()){//这个packet发送成功，但是这个端口还有数据的话，我也需要注册一下，要不然没人唤醒了
             m_mmu->RegisterWaitPort(outDev, inDev);
             m_mmu->m_ingressBlocked[inDev] = true;
-            std::cout<<"虽然我是tail/single，但这个端口还有数据，所以我继续注册等待锁"<<std::endl;
+            //std::cout<<"虽然我是tail/single，但这个端口还有数据，所以我继续注册等待锁"<<std::endl;
         }else{
             m_mmu->m_ingressBlocked[inDev] = false;
-           std::cout<<"我是tail/single，这个端口暂时没有数据了，所以我不注册等待锁了"<<std::endl;
+           //std::cout<<"我是tail/single，这个端口暂时没有数据了，所以我不注册等待锁了"<<std::endl;
         }
         m_portOccupancy[outDev] = -1; // 解锁
         m_connectionTable[inDev].isValid = false;
@@ -345,7 +345,7 @@ bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> pack
                                          CustomHeader &ch) {
     
     uint32_t inDev = device->GetIfIndex();
-    std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的ArbitrateAndSend函数了"<<std::endl;
+    //std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的ArbitrateAndSend函数了"<<std::endl;
     m_mmu->ArbitrateAndSend(inDev);//这里直接调用转发函数就行了，尝试一下进行转发
     return true;
 }
@@ -362,9 +362,9 @@ int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
 
     // no matching entry
     if (entry == m_rtTable.end()) {
-        std::cout << "[ERROR] Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
-                  << "No matching entry, so drop this packet at SwitchNode (l3Prot:" << ch.l3Prot
-                  << ")" << std::endl;
+        //std::cout << "[ERROR] Sw(" << m_id << ")," << PARSE_FIVE_TUPLE(ch)
+                  //<< "No matching entry, so drop this packet at SwitchNode (l3Prot:" << ch.l3Prot
+                  //<< ")" << std::endl;
         assert(false);
     }
 
@@ -387,7 +387,7 @@ int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
         case 9:
             return DoLbConWeave(p, ch, nexthops); /** DUMMY: Do ECMP */
         default:
-            std::cout << "Unknown lb_mode(" << Settings::lb_mode << ")" << std::endl;
+            //std::cout << "Unknown lb_mode(" << Settings::lb_mode << ")" << std::endl;
             assert(false);
     }
 }
