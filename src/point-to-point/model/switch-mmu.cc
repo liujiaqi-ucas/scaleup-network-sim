@@ -59,6 +59,7 @@ void SwitchMmu::RegisterWaitSpace(uint32_t outDev, uint32_t inDev) {
     m_waitingForSpace[outDev].insert(inDev);
 }
 void SwitchMmu::RegisterWaitPort(uint32_t outDev, uint32_t inDev) {
+    std::cout<<"switch "<<m_node->GetId()<<"的device "<<inDev<<" 因为 device "<<outDev<<" 被占用，所以被注册为等待锁了"<<std::endl;
     // 记录：inDev 正在等待 outDev 的空间
     m_waitingForLock[outDev].insert(inDev);
 }
@@ -88,10 +89,10 @@ void SwitchMmu::Input(Ptr<Packet> p, uint32_t inDev) {
     }
     // 4. 【初次推动】
     // 如果队列之前是空的，说明没人排队，我有机会直接走，赶紧试一下
-    if (m_ingressQueues[inDev].size() == 1) {
-        std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" ingress队列只有我一个，我试一下直接转发"<<std::endl;
+    //if (m_ingressQueues[inDev].size() == 1) {
+        //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" ingress队列只有我一个，我试一下直接转发"<<std::endl;
         ArbitrateAndSend(inDev);
-    }
+    //}
 }
 
 
@@ -114,11 +115,16 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             // ----------------------------------------------------
             m_ingressQueues[inDev].pop_front();
             // 既然发成功了，blocked 肯定是 false
-            m_ingressBlocked[inDev] = false; 
-
+            //m_ingressBlocked[inDev] = false; 
+            std::cout<<"switch "<<m_node->GetId()<<"的device "<<inDev<<" 成功转发了一个包，队列长度现在是"<<m_ingressQueues[inDev].size()<<std::endl;
             // 处理连续发送逻辑
             if (type == 2 /*TAIL*/ || type == 3 /*SINGLE*/) {
-                
+                if (!m_ingressQueues[inDev].empty()) {
+                    // 不设 blocked，让 ScheduleNow 来重新驱动
+                    Simulator::ScheduleNow(&SwitchMmu::ArbitrateAndSend, this, inDev);
+                } else {
+                    m_ingressBlocked[inDev] = false;
+                }
                 break; 
             }
             // 如果是 HEAD/BODY，必须继续发下一个（Wormhole 约束）
@@ -137,7 +143,9 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             break; 
         }
     }
-    
+    if (m_ingressQueues[inDev].empty()) {
+        m_ingressBlocked[inDev] = false;
+    }
     return;
 }
 // 唤醒辅助函数
@@ -189,6 +197,11 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
         
     //     curr = (curr + 1) % m_activePortCnt;
     // }
+    std::cout<<"switch "<<m_node->GetId()<<"的device "<<outDev<<" 现在要唤醒了，当前等待锁的入端口名单是{ ";
+    for (const uint32_t& val : m_waitingForLock[outDev]) {
+    std::cout << val << " ";
+}
+    std::cout << "}" << std::endl;
     for (uint32_t i = 0; i < m_activePortCnt; i++) {
         uint32_t curr = ((m_rrPtr[outDev] + i) % m_activePortCnt) + 1;  // +1 变成 1-based
         if (m_waitingForLock[outDev].count(curr)) {
@@ -196,6 +209,7 @@ void SwitchMmu::NotifyOutputPortFree(uint32_t outDev) {
                 m_waitingForLock[outDev].erase(curr);
                 m_rrPtr[outDev] = curr;
                 WakeupIngress(curr);
+                std::cout<<"switch "<<m_node->GetId()<<"的device "<<outDev<<"唤醒了 device "<<curr<<" 了"<<std::endl;
                 return;
             } else {
                 m_waitingForLock[outDev].erase(curr);

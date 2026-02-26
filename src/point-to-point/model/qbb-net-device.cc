@@ -816,8 +816,83 @@ void QbbNetDevice::DequeueAndTransmit(void) {
             // 跳转到公共发送逻辑（去打 SeqNum）
             goto PROCESS_NEW_PACKET;
         } else {
+
             std::cout<<" switch Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"发消息被阻塞了，目前我的m_txLimit是"<<m_txLimit<<"   我的信用是"<<m_txTotalSent<<std::endl;
             // [失败]：还是没钱，继续卡着，直接返回
+            for (uint32_t i = 0; i < 8; i++) {
+        
+        // 检查两个条件：
+        // 1. 是否有 ACK/NAK 要发 (m_ctrl_state)
+        // 2. 是否有 Credit 要发 (creditflag) —— 即使没有 ACK，光发 Credit 也是有意义的
+        
+        bool need_ack_nak = (m_ctrl_state[i] != CTRL_NONE);
+        
+        // 如果有控制信息，或者 (作为优化) 刚好有 Credit 且这是一个活跃的 VC
+        if (need_ack_nak) {
+            std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有控制信息要发"<<std::endl;
+            NS_LOG_LOGIC("Creating Standalone Control Packet for VC " << i);
+
+            // 1. 造空包 (Payload Size = 0)
+             p = Create<Packet>(0);
+
+            // 2. 准备头部
+            FlitHeader fh;
+            fh.SetType(3);   // TYPE = 3 (SINGLE)，表示单帧控制包
+            fh.SetVcId(i);   // 填入对应的 VC
+            fh.SetSeqNum(0); // 控制包不消耗 GBN 序号，填 0
+            
+            // 3. 填入 ACK / NAK 信息
+            if (m_ctrl_state[i] == CTRL_NAK) {
+                fh.SetNack(m_ctrl_seq[i]); // 标记为 NAK，填入期待序号
+                NS_LOG_INFO("Sending Standalone NAK for VC " << i << " Seq " << m_ctrl_seq[i]);
+            } 
+            else if (m_ctrl_state[i] == CTRL_ACK) {
+                fh.SetAck(m_ctrl_seq[i]);  // 标记为 ACK，填入确认序号
+                NS_LOG_INFO("Sending Standalone ACK for VC " << i << " Seq " << m_ctrl_seq[i]);
+            }
+
+            // 4. 填入 Credit 信息 (顺便捎带)
+            // 即使是专门发 ACK 的包，也别忘了把最新的信用带上
+            if (creditflag) {
+                std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"同时有流控信息也要发"<<std::endl;
+                fh.SetCredit(0, m_rxCumulativeFreed); // 填入你的接收端释放计数
+                creditflag = false; // 既然发出去了，标志位清零
+            }
+
+            // 5. 封包
+            p->AddHeader(fh);
+
+            // 6. 清除状态
+            // 这个 ACK/NAK 已经随包发出了，任务完成
+            m_ctrl_state[i] = CTRL_NONE;
+
+            // 7. 发射！
+            // TransmitStart 会设置 BUSY，并安排发送完成事件
+            TransmitStart(p);
+            
+            // 重要：一次回调只发一个包。
+            // 物理层变 BUSY 了，必须 return。
+            // 等发完这个包，TransmitComplete 会再次调用 DequeueAndTransmit 处理剩下的。
+            return; 
+        }
+    }
+    
+    // 补充情况：如果没有 ACK/NAK，但有 Credit 急需发送 (避免死锁)
+    // 如果 creditflag 为 true，且上面循环没触发发送
+    if (creditflag) {
+        std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"目前只有信用需要单独发送，m_rxCumulativeFreed是   "<<m_rxCumulativeFreed<<std::endl;
+        // 随便找一个 VC (通常是 0) 发送纯 Credit Update
+        p = Create<Packet>(0);
+        FlitHeader fh;
+        fh.SetType(3);
+        fh.SetVcId(0);
+        fh.SetCredit(0, m_rxCumulativeFreed);
+        p->AddHeader(fh);
+        
+        creditflag = false;
+        TransmitStart(p);
+        return;
+    }
             return; 
         }
     }
@@ -1264,11 +1339,11 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 任务在第一步已经完成了，直接结束
         return;
     }
-
+    
     // ---------------------------------------------------------
     // 第三步：数据包 GBN 核心判断 (The Bouncer)
     // ---------------------------------------------------------
-
+    std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"进入GBN核心判断了，收到的包的序号是"<<seq<<" 期待的序号是"<<expected_seq<<std::endl;
     // 计算距离 (处理回绕)
     int dist = SeqDist(seq, expected_seq);
 

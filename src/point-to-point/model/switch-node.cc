@@ -317,6 +317,14 @@ bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
 
     // 5. 如果是 TAIL，解锁并唤醒等待锁的端口
     if (type == 2 /*TAIL*/ || type == 3 /*SINGLE*/) {
+        // if(!m_mmu->m_ingressQueues[inDev].empty()){//这个packet发送成功，但是这个端口还有数据的话，我也需要注册一下，要不然没人唤醒了
+        //     m_mmu->RegisterWaitPort(outDev, inDev);
+        //     m_mmu->m_ingressBlocked[inDev] = true;
+        //     //std::cout<<"虽然我是tail/single，但这个端口还有数据，所以我继续注册等待锁"<<std::endl;
+        // }else{
+        //     m_mmu->m_ingressBlocked[inDev] = false;
+        //    //std::cout<<"我是tail/single，这个端口暂时没有数据了，所以我不注册等待锁了"<<std::endl;
+        // }
         m_portOccupancy[outDev] = -1; // 解锁
         m_connectionTable[inDev].isValid = false;
 
