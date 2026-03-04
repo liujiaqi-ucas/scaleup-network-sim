@@ -129,7 +129,7 @@ void SwitchMmu::ArbitrateAndSend(uint32_t inDev) {
             // 在 ArbitrateAndSend 的 CommitHead 前后：
            //std::cout << "ArbitrateAndSend: m_rxBuffer地址=" << qbbDev->m_rxBuffer << std::endl;
             //std::cout<<"switch "<<m_node->GetId()<<"的device"<<inDev<<" 转发了一个flit，清理槽位成功现在rxbuffer打印一下"<<std::endl;
-            qbbDev->m_rxBuffer->PrintDebugState();
+            //qbbDev->m_rxBuffer->PrintDebugState();
              // 既然发成功了，blocked 肯定是 false
             //release信用的过程在AttemptForward里面调用了
             // 既然发成功了，blocked 肯定是 false

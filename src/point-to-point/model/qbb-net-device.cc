@@ -611,7 +611,7 @@ void QbbNetDevice::TriggerNak(uint8_t vc_id, uint16_t seq) {
 
     //std::cout << "Node " << m_node->GetId() << "的device" << m_ifIndex
               //<< "发现乱序了，执行triggernak函数，此时nakseq是" << seq;
-    PrintBitmap(nakbitmapHigh, nakbitmapLow);
+    //PrintBitmap(nakbitmapHigh, nakbitmapLow);
     if (m_txMachineState == READY) {
         DequeueAndTransmit();
     }
@@ -1509,10 +1509,10 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     int cotype=co.GetFlitType();
         m_phyRxDropTrace(packet);
         if(cotype==0){
-        //std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<" 丢了一个不是nak包 "<<std::endl;  // 丢弃包的时候打印一下日志 
+        std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<" 丢了一个不是nak包 "<<std::endl;  // 丢弃包的时候打印一下日志 
                   
         }else{
-        //std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"丢了一个nak包了"<<std::endl;  // 丢弃包的时候打印一下日志
+        std::cout << "Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"丢了一个nak包了"<<std::endl;  // 丢弃包的时候打印一下日志
         }
         return;
     }
@@ -1636,7 +1636,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         m_rxBuffer->StorePacket(seq, packet);
         // 在 Receive 的 StorePacket 前后：
         //std::cout << "Receive: m_rxBuffer地址=" << m_rxBuffer << std::endl;
-        m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
+        //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
         // 3. 状态更新与触发
         if (seq == m_rxNext) {
             // [填坑成功]

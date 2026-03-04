@@ -166,7 +166,7 @@ uint32_t RdmaHw::GetNicIdxOfQp(Ptr<RdmaQueuePair> qp) {
         return v[qp->GetHash() % v.size()];
     }
     NS_ASSERT_MSG(false, "We assume at least one NIC is alive");
-    std::cout << "We assume at least one NIC is alive" << std::endl;
+    //std::cout << "We assume at least one NIC is alive" << std::endl;
     exit(1);
 }
 
@@ -259,7 +259,7 @@ uint32_t RdmaHw::GetNicIdxOfRxQp(Ptr<RdmaRxQueuePair> q) {
         return v[q->GetHash() % v.size()];
     }
     NS_ASSERT_MSG(false, "We assume at least one NIC is alive");
-    std::cout << "We assume at least one NIC is alive" << std::endl;
+    //std::cout << "We assume at least one NIC is alive" << std::endl;
     exit(1);
 }
 // void RdmaHw::DeleteRxQp(Ptr<RdmaRxQueuePair> q) {
@@ -330,7 +330,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
                 exit(1);
             }
         }
-        std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
+        //std::cout<<" Node "<<nodeId<<" receive packet "<<ch.udp.seq<<"  Expected Packet is  "<<rxQp->expected_seq<<std::endl;
     if (ch.udp.seq != rxQp->expected_seq) { // 校验序号
         //报错，这是不正常的，说明机制有问题
         printf("ERROR: UDP NIC received out-of-order flit seq %u, expected %u\n",
@@ -345,7 +345,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
             rxQp->m_flow_id = fit.GetId();
         }
     }
-    std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
+    //std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
     rxQp->expected_seq+=fh.GetPktTotalBytes(); // 更新期望的下一个序号
         // 把 FlitHeader 加回去，保持包的完整性 (如果后续还需要处理)
         // 或者因为我们已经拿到了 rawPayloadSize，这里不加回去也行，看后续逻辑
@@ -369,7 +369,7 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
         FlowIDNUMTag fint;
         if (p->PeekPacketTag(fint)) {
             rxQp->m_size = fint.GetFlowSize();
-            std::cout<<"我是Node "<<m_node->GetId()<<"收到流ID为"<<rxQp->m_flow_id<<"的流的总大小是"<<rxQp->m_size<<std::endl;
+            //std::cout<<"我是Node "<<m_node->GetId()<<"收到流ID为"<<rxQp->m_flow_id<<"的流的总大小是"<<rxQp->m_size<<std::endl;
         }
     }
     
@@ -406,12 +406,12 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     rxQp->received_bytes += effectiveDataBytes;
     uint32_t srcId = Settings::ip_to_node_id(Ipv4Address(rxQp->sip));
     uint32_t dstId = Settings::ip_to_node_id(Ipv4Address(rxQp->dip));
-    std::cout << "  我是Node  " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
-    <<" 我的流是从 "<<srcId<<" 发来的，发往 "<<dstId
-              << " Raw: " << rawPayloadSize 
-              << " Effective: " << effectiveDataBytes 
-              << " TotalRecv: " << rxQp->received_bytes 
-              << " / Target: " << rxQp->m_size << std::endl;
+    //std::cout << "  我是Node  " << nodeId << " 累计收到流ID为" << rxQp->m_flow_id
+    //<<" 我的流是从 "<<srcId<<" 发来的，发往 "<<dstId
+              //<< " Raw: " << rawPayloadSize 
+             // << " Effective: " << effectiveDataBytes 
+              //<< " TotalRecv: " << rxQp->received_bytes 
+              //<< " / Target: " << rxQp->m_size << std::endl;
 
     // =========================================================
     // 阶段 E: 流结束判断 (Finish Check)
