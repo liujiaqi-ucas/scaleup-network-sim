@@ -90,6 +90,11 @@ KMIN_MAP {kmin_map}
 PMAX_MAP {pmax_map}
 LOAD {load}
 RANDOM_SEED 1
+
+MMU_POOL_SIZE {mmu_pool_size}
+MMU_MIN_GUARANTEE {mmu_min_guarantee}
+CREDIT_INIT {credit_init}
+RTO_US {rto_us}
 """
 
 
@@ -113,8 +118,22 @@ lb_modes = {
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,  # 2-tier -> all 100Gbps
     "fat_k8_100G_OS2": 156000,  # 3-tier -> all 100Gbps
-    "H100_8_300G_OS2": 312000, 
-    "twoserver_oneswitch_OS2":312000,
+    "H100_8_300G_OS2": 312000,
+    "twoserver_oneswitch_OS2": 312000,
+    "NVL72_72_800G_OS2": 200000,  # NVL72: 800Gbps * 200ns RTT / 8 = 20KB, with margin
+}
+
+# 链路层 SR+CBFC 参数 (按拓扑自动选择)
+# mmu_pool_size: 交换机 MMU 共享池大小 (flit 数)
+# mmu_min_guarantee: 每端口保底额度 (flit 数)
+# credit_init: 初始信用 = RxBuffer 容量 (flit 数)
+# rto_us: RTO 超时值 (微秒)
+topo2linklayer = {
+    "H100_8_300G_OS2":        {"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 20},
+    "twoserver_oneswitch_OS2":{"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 20},
+    "NVL72_72_800G_OS2":      {"mmu_pool_size": 16384, "mmu_min_guarantee": 32,  "credit_init": 192, "rto_us": 5},
+    "leaf_spine_128_100G_OS2":{"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
+    "fat_k8_100G_OS2":        {"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
 }
 
 FLOWGEN_DEFAULT_TIME = 2.0  # see /traffic_gen/traffic_gen.py::base_t
@@ -355,6 +374,19 @@ def main():
     bdp = int(topo2bdp[topo])
     print("1BDP = {}".format(bdp))
 
+    # 链路层 SR+CBFC 参数 (按拓扑自动选择)
+    if topo2linklayer.get(topo) == None:
+        print("WARNING - topology '{}' has no link-layer config in run.py, using defaults".format(topo), flush=True)
+        ll_params = {"mmu_pool_size": 4096, "mmu_min_guarantee": 64, "credit_init": 256, "rto_us": 20}
+    else:
+        ll_params = topo2linklayer[topo]
+    mmu_pool_size = ll_params["mmu_pool_size"]
+    mmu_min_guarantee = ll_params["mmu_min_guarantee"]
+    credit_init = ll_params["credit_init"]
+    rto_us = ll_params["rto_us"]
+    print("Link-layer params: pool={}, minG={}, credit={}, rto={}us".format(
+        mmu_pool_size, mmu_min_guarantee, credit_init, rto_us))
+
     # DCQCN parameters (NOTE: HPCC's 400KB/1600KB is too large, although used in Microsoft)
     kmax_map = "6 %d %d %d %d %d %d %d %d %d %d %d %d" % (
         bw*200000000, 400, bw*500000000, 400, bw*1000000000, 400, bw*2*1000000000, 400, bw*2500000000, 400, bw*4*1000000000, 400)
@@ -397,7 +429,9 @@ def main():
                                         ai=ai, hai=hai, dctcp_ai=dctcp_ai,
                                         has_win=has_win, var_win=var_win,
                                         fast_react=fast_react, mi=mi, int_multi=int_multi, ewma_gain=ewma_gain,enable_qcn=enable_qcn,
-                                        kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map)
+                                        kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map,
+                                        mmu_pool_size=mmu_pool_size, mmu_min_guarantee=mmu_min_guarantee,
+                                        credit_init=credit_init, rto_us=rto_us)
     with open(config_name, "w") as file:
         file.write(config)
     # run program

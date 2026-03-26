@@ -156,10 +156,11 @@ void QbbHelper::EnableAsciiInternal(
 
         // std::cout<<"Hook Callback\n";
 
-        Ptr<BEgressQueue> queue = device->GetQueue();
-        asciiTraceHelper.HookDefaultEnqueueSinkWithoutContext<BEgressQueue>(queue, "Enqueue", theStream);
-        asciiTraceHelper.HookDefaultDropSinkWithoutContext<BEgressQueue>(queue, "Drop", theStream);
-        asciiTraceHelper.HookDefaultDequeueSinkWithoutContext<BEgressQueue>(queue, "Dequeue", theStream);
+        // BEgressQueue tracing removed — old queue system replaced by CBFC+SR
+        // Ptr<BEgressQueue> queue = device->GetQueue();
+        // asciiTraceHelper.HookDefaultEnqueueSinkWithoutContext<BEgressQueue>(queue, "Enqueue", theStream);
+        // asciiTraceHelper.HookDefaultDropSinkWithoutContext<BEgressQueue>(queue, "Drop", theStream);
+        // asciiTraceHelper.HookDefaultDequeueSinkWithoutContext<BEgressQueue>(queue, "Dequeue", theStream);
 
         // PhyRxDrop trace source for "d" event
         asciiTraceHelper.HookDefaultDropSinkWithoutContext<QbbNetDevice>(device, "PhyRxDrop", theStream);
@@ -221,10 +222,11 @@ QbbHelper::Install(Ptr<Node> a, Ptr<Node> b) {
     devB->SetAddress(Mac48Address::Allocate());
     b->AddDevice(devB);
 
-    Ptr<BEgressQueue> queueA = CreateObject<BEgressQueue>();
-    devA->SetQueue(queueA);
-    Ptr<BEgressQueue> queueB = CreateObject<BEgressQueue>();
-    devB->SetQueue(queueB);
+    // BEgressQueue 已不再使用，交换机侧由 MMU 管理，端侧由 RdmaEgressQueue 管理
+    // Ptr<BEgressQueue> queueA = CreateObject<BEgressQueue>();
+    // devA->SetQueue(queueA);
+    // Ptr<BEgressQueue> queueB = CreateObject<BEgressQueue>();
+    // devB->SetQueue(queueB);
 
     // If MPI is enabled, we need to see if both nodes have the same system id
     // (rank), and the rank is the same as this instance.  If both are true,
@@ -331,7 +333,7 @@ void QbbHelper::GetTraceFromPacket(TraceFormat &tr, Ptr<QbbNetDevice> dev, Ptr<c
             break;
     }
     tr.size = p->GetSize();  // hdr.m_payloadSize;
-    tr.qlen = dev->GetQueue()->GetNBytes(qidx);
+    tr.qlen = 0; // BEgressQueue 已移除
 }
 
 void QbbHelper::PacketEventCallback(FILE *file, Ptr<QbbNetDevice> dev, Ptr<const Packet> p, uint32_t qidx, Event event, bool hasL2) {

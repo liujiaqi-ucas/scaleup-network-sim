@@ -77,10 +77,16 @@ Time conweave_defaultVOQWaitingTime = MicroSeconds(500);  // default flush timer
 bool conweave_pathAwareRerouting = true;
 
 /*------------------------ simulation variables -----------------------------*/
-uint64_t one_hop_delay = 500;  // nanoseconds
+uint64_t one_hop_delay = 0;  // 自动从拓扑文件第一条链路读取，不再硬编码
 uint32_t cc_mode = 1;           // mode for congestion control, 1: DCQCN
 bool enable_qcn = true, enable_pfc = true, use_dynamic_pfc_threshold = true;
-uint32_t packet_payload_size = 1000, l2_chunk_size = 0, l2_ack_interval = 0;
+uint32_t packet_payload_size = 1392, l2_chunk_size = 0, l2_ack_interval = 0;
+
+/*---- 链路层 SR+CBFC 可配参数 (可通过配置文件或命令行覆盖) ----*/
+uint32_t mmu_pool_size = 4096;    // 交换机 MMU 总池大小 (flit 数)
+uint32_t mmu_min_guarantee = 64;  // 每端口保底额度 (flit 数)
+uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
+uint32_t rto_us = 20;             // RTO 超时值 (微秒)
 double pause_time = 5;  // PFC pause, microseconds
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
 // queue length monitoring time is not used in this simulator
@@ -673,8 +679,8 @@ void monitor_buffer(FILE *qlen_output, NodeContainer *n) {
             if (queue_result.find(i) == queue_result.end()) queue_result[i];
             for (uint32_t j = 1; j < sw->GetNDevices(); j++) {
                 uint32_t size = 0;
-                for (uint32_t k = 0; k < SwitchMmu::qCnt; k++)
-                    size += sw->m_mmu->egress_bytes[j][k];
+                // 旧 MMU 的 egress_bytes 已不存在，用 poolFree 替代做粗略监控
+                size = sw->m_mmu->GetPoolFree();
                 queue_result[i][j].add(size);
             }
         }
@@ -1246,6 +1252,26 @@ int main(int argc, char *argv[]) {
                 conf >> v;
                 random_seed = v;
                 std::cerr << "RANDOM_SEED\t\t\t" << random_seed << "\n";
+            } else if (key.compare("MMU_POOL_SIZE") == 0) {
+                uint32_t v;
+                conf >> v;
+                mmu_pool_size = v;
+                std::cerr << "MMU_POOL_SIZE\t\t\t" << mmu_pool_size << "\n";
+            } else if (key.compare("MMU_MIN_GUARANTEE") == 0) {
+                uint32_t v;
+                conf >> v;
+                mmu_min_guarantee = v;
+                std::cerr << "MMU_MIN_GUARANTEE\t\t" << mmu_min_guarantee << "\n";
+            } else if (key.compare("CREDIT_INIT") == 0) {
+                uint32_t v;
+                conf >> v;
+                credit_init = v;
+                std::cerr << "CREDIT_INIT\t\t\t" << credit_init << "\n";
+            } else if (key.compare("RTO_US") == 0) {
+                uint32_t v;
+                conf >> v;
+                rto_us = v;
+                std::cerr << "RTO_US\t\t\t\t" << rto_us << "\n";
             }
 
             fflush(stdout);
@@ -1280,6 +1306,8 @@ int main(int argc, char *argv[]) {
     Config::SetDefault("ns3::QbbNetDevice::QcnEnabled", BooleanValue(enable_qcn));
     Config::SetDefault("ns3::QbbNetDevice::DynamicThreshold", BooleanValue(dynamicth));
     Config::SetDefault("ns3::QbbNetDevice::QbbEnabled", BooleanValue(enable_pfc));
+    Config::SetDefault("ns3::QbbNetDevice::CreditInit", UintegerValue(credit_init));
+    Config::SetDefault("ns3::QbbNetDevice::RtoValue", TimeValue(MicroSeconds(rto_us)));
 
     if (cc_mode != 1 && lb_mode == 9) {
         std::cout << "Currently, ConWeave supports only DCQCN congestion control for RDMA. \nIf "
@@ -1449,10 +1477,14 @@ std::cout<<"333333333"<<std::endl;
         std::string data_rate, link_delay;
         double error_rate;
         topof >> src >> dst >> data_rate >> link_delay >> error_rate;
-        //std::cout<<src<<"  "<<dst<<"  "<<data_rate<<"  "<<link_delay<<"  "<<error_rate<<std::endl;
-        //std::cout<<"one_hop_delay="<<one_hop_delay<<"   link_delay=     "<<link_delay<<std::endl;
         /** ASSUME: fixed one-hop delay across network */
-        assert(std::to_string(one_hop_delay) + "ns" == link_delay);
+        if (i == 0) {
+            // 从第一条链路自动读取 one_hop_delay (stoull 自动忽略 "ns" 后缀)
+            one_hop_delay = std::stoull(link_delay);
+            std::cerr << "ONE_HOP_DELAY (auto)\t\t" << one_hop_delay << "ns\n";
+        } else {
+            assert(std::to_string(one_hop_delay) + "ns" == link_delay);
+        }
 
         link_pairs.push_back(std::make_pair(src, dst));
         Ptr<Node> snode = n.Get(src), dnode = n.Get(dst);
@@ -1561,10 +1593,9 @@ std::cout<<"333333333"<<std::endl;
                 //uint32_t headroom = rate * delay / 8 / 1000000000 * 2 + 2 * sw->m_mmu->MTU;
                 //sw->m_mmu->ConfigHdrm(j, headroom);
             }
-            sw->m_mmu->ConfigNPort(sw->GetNDevices() - 1);
-            sw->m_mmu->ConfigBufferSize(buffer_size * 1024 *
-                                        1024);  // default 0, specify in run.py!!
-            sw->m_mmu->node_id = sw->GetId();
+            // 配置新的共享物理池 (替换旧的 ConfigNPort/ConfigBufferSize)
+            sw->m_mmu->ConfigPool(mmu_pool_size, mmu_min_guarantee);
+            sw->m_mmu->SetNode(GetPointer(sw));
             //NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
                        // (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));
         }
@@ -1610,7 +1641,7 @@ std::cout<<"333333333"<<std::endl;
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
     topo2bdpMap[std::string("H100_8_300G_OS2")] = 312000;   // RTT=8320
     topo2bdpMap[std::string("twoserver_oneswitch")] = 312000;
-
+    topo2bdpMap[std::string("NVL72_72_800G_OS2")] = 200000;
     // topology_file
     bool found_topo2bdpMap = false;
     uint32_t irn_bdp_lookup = 0;

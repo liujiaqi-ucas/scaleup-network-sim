@@ -34,17 +34,32 @@ TypeId SwitchNode::GetTypeId(void) {
     return tid;
 }
 
+SwitchNode::~SwitchNode() {}
+
 SwitchNode::SwitchNode() {
-    // 1. 先创建对象！
     m_mmu = CreateObject<SwitchMmu>();
-    
-    // 2. 只有创建了之后，才能调用它的方法
     m_mmu->SetNode(this);
     m_ecmpSeed = m_id;
     m_isToR = false;
-    m_node_type = 1;
-    m_isToR = false;
     m_drill_candidate = 2;
+    
+    for (uint32_t i = 0; i < pCnt; i++) {
+        m_txBytes[i] = 0;
+    }
+
+    // 【极其重要的初始化】：防止一开始锁死和越界
+    m_txPortLocks.resize(pCnt, -1);
+    m_rxActiveRoutes.resize(pCnt, -1);
+    // 1. 先创建对象！
+    // m_mmu = CreateObject<SwitchMmu>();
+    
+    // // 2. 只有创建了之后，才能调用它的方法
+    // m_mmu->SetNode(this);
+    // m_ecmpSeed = m_id;
+    // m_isToR = false;
+    // m_node_type = 1;
+    // m_isToR = false;
+    // m_drill_candidate = 2;
     
     // Conga's Callback for switch functions
     //m_mmu->m_congaRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
@@ -55,42 +70,156 @@ SwitchNode::SwitchNode() {
     //m_mmu->m_conweaveRouting.SetSwitchSendToDevCallback(
         //MakeCallback(&SwitchNode::SendToDevContinue, this));
 // 你的逻辑依赖于 -1 代表空闲，如果不初始化，里面是随机垃圾值，一开始就会导致锁死
-    for (uint32_t i = 0; i < pCnt; i++) {
-        m_portOccupancy[i] = -1; 
+    // for (uint32_t i = 0; i < pCnt; i++) {
+    //     m_portOccupancy[i] = -1; 
+    // }
+    // for (uint32_t i = 0; i < pCnt; i++) {
+    //     m_txBytes[i] = 0;
+    // }
+    // // 初始化账本
+    // for(int i=0; i<pCnt; i++)
+    //     for(int j=0; j<qCnt; j++)
+    //         m_cumulativeFreedBytes[i][j] = 0;
+    // for (uint32_t i = 0; i < pCnt; i++) {
+    //     m_connectionTable[i].outDev = 0;     // 设为0或安全值
+    //     m_connectionTable[i].qIndex = 0;
+    //     m_connectionTable[i].isValid = false; // 必须标记为无效！
+    // }
+}
+// =========================================================
+// 【新增桥接函数】：剥离 Flit 头部去查 IP 路由表
+// =========================================================
+uint32_t SwitchNode::LookupRoutingTable(Ptr<Packet> flit) {
+    FlitHeader fh;
+    flit->RemoveHeader(fh); 
+    
+    CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
+    flit->PeekHeader(ch); // 获取真实的五元组
+    
+    flit->AddHeader(fh);  // 查完后必须原封不动地装回去！
+    
+    return GetOutDev(flit, ch); // 调用你原来的路由分发逻辑
+}
+// =========================================================
+// 核心仲裁引擎：虫洞路由状态机
+// =========================================================
+ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
+    int txPortId = -1;
+    FlitHeader fh;
+    flit->PeekHeader(fh);
+    uint32_t type = fh.GetType(); // 0:HEAD, 1:BODY, 2:TAIL, 3:SINGLE
+
+    // -----------------------------------------------------
+    // 导航阶段
+    // -----------------------------------------------------
+    if (type == 0 || type == 3) {
+        txPortId = LookupRoutingTable(flit);
+        m_rxActiveRoutes[rxPortId] = txPortId; // 记录备忘录
     }
-    for (uint32_t i = 0; i < pCnt; i++) {
-        m_txBytes[i] = 0;
+    else if (type == 1 || type == 2) {
+        txPortId = m_rxActiveRoutes[rxPortId];
+        if (txPortId == -1) {
+            NS_LOG_ERROR("Ghost Flit! Body/Tail arrived without a preceding Head flit at RX " << rxPortId);
+            return BLOCKED_BY_LOCK;
+        }
     }
-    // 初始化账本
-    for(int i=0; i<pCnt; i++)
-        for(int j=0; j<qCnt; j++)
-            m_cumulativeFreedBytes[i][j] = 0;
-    for (uint32_t i = 0; i < pCnt; i++) {
-        m_connectionTable[i].outDev = 0;     // 设为0或安全值
-        m_connectionTable[i].qIndex = 0;
-        m_connectionTable[i].isValid = false; // 必须标记为无效！
+
+    // -----------------------------------------------------
+    // 阶段一：查锁
+    // -----------------------------------------------------
+    int currentOwner = m_txPortLocks[txPortId];
+    if (currentOwner != -1 && currentOwner != rxPortId) {
+        // 【公平唤醒】加入该 TX 端口的 FIFO 等待队列（查重防止重复入队）
+        if (m_inLockQueue.find(rxPortId) == m_inLockQueue.end()) {
+            m_lockWaiters[txPortId].push_back(rxPortId);
+            m_inLockQueue.insert(rxPortId);
+        }
+        return BLOCKED_BY_LOCK;
+    }
+
+    // -----------------------------------------------------
+    // 阶段二：查 MMU
+    // -----------------------------------------------------
+    int index = m_mmu->AllocateSpace(txPortId);
+    if (index == -1) {
+        // 【公平唤醒】加入全局 MMU FIFO 等待队列（查重防止重复入队）
+        if (m_inMmuQueue.find(rxPortId) == m_inMmuQueue.end()) {
+            m_mmuWaiters.push_back(rxPortId);
+            m_inMmuQueue.insert(rxPortId);
+        }
+        return BLOCKED_BY_MMU;
+    }
+
+    // -----------------------------------------------------
+    // 阶段三：存放与状态转移
+    // -----------------------------------------------------
+    m_mmu->StorePacket(index, flit); // 零拷贝存入金库
+    Ptr<QbbNetDevice> txDevice = DynamicCast<QbbNetDevice>(GetDevice(txPortId));
+
+    if (txDevice) {
+        txDevice->EnqueueTxIndex(index);
+        txDevice->DequeueAndTransmit();
+    }
+    if (type == 0 || type == 3) {
+        m_txPortLocks[txPortId] = rxPortId; // 火车头上锁
+    }
+
+    if (type == 2 || type == 3) {
+        m_txPortLocks[txPortId] = -1;       // 火车尾解锁
+        m_rxActiveRoutes[rxPortId] = -1;    // 擦除导航记录
+
+        NotifyLockReleased(txPortId);       // 叫醒等这个 TX 端口的下一个人
+    }
+
+    // 冲关成功，从跟踪集合中清除（可能已被 Notify 弹出，erase 是幂等的）
+    m_inLockQueue.erase(rxPortId);
+    m_inMmuQueue.erase(rxPortId);
+
+    return FORWARD_SUCCESS;
+}
+
+// =========================================================
+// 【公平唤醒导火索 1】：Lock 释放 —— per-TX-port FIFO
+// =========================================================
+// 只唤醒等这个特定 TX 端口的 RX 端口，按 FIFO 顺序逐个尝试。
+// 一旦有人成功抢到锁（txPortLocks 被占），立刻停止。
+// 如果队头因为 MMU 满而失败，继续尝试下一个（锁还是空闲的）。
+void SwitchNode::NotifyLockReleased(int txPortId) {
+    while (!m_lockWaiters[txPortId].empty()) {
+        // 取队头（最先等待的端口）
+        int rxPortId = m_lockWaiters[txPortId].front();
+        m_lockWaiters[txPortId].pop_front();
+        m_inLockQueue.erase(rxPortId);
+
+        Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
+        if (dev) {
+            dev->TryForwardingRxBuffer();
+        }
+
+        // 如果锁已被占，说明刚才那个端口成功拿到了锁，后面的人不用试了
+        if (m_txPortLocks[txPortId] != -1) break;
     }
 }
 
+// =========================================================
+// 【公平唤醒导火索 2】：MMU 释放 —— 全局 FIFO
+// =========================================================
+// 逐个唤醒，直到空闲空间耗尽。
+// 这样每次释放 1 个 flit 只唤醒 1 个等待者，消除雪崩效应。
+void SwitchNode::NotifySpaceAvailable() {
+    while (!m_mmuWaiters.empty()) {
+        int rxPortId = m_mmuWaiters.front();
+        m_mmuWaiters.pop_front();
+        m_inMmuQueue.erase(rxPortId);
 
-// 这是一个纯查询函数，不改变任何状态
-int32_t SwitchNode::GetPacketDest(Ptr<Packet> p) {
-    FlitHeader fh;
-    p->PeekHeader(fh);
-    
-    // 如果是 HEAD，查路由表
-    if (fh.GetType() == 0 || fh.GetType() == 3) {
-        p->RemoveHeader(fh); // 取出 FlitHeader 以便查路由
-       CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
-        p->PeekHeader(ch);
-        p->AddHeader(fh); // 放回 FlitHeader，保持包不变
-        return GetOutDev(p, ch); // 复用你的路由查找逻辑
+        Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
+        if (dev) {
+            dev->TryForwardingRxBuffer();
+        }
+
+        // 空间耗尽则停止（避免后续端口白跑一趟）
+        if (m_mmu->GetPoolFree() == 0) break;
     }
-    
-    // 如果是 BODY，理论上不需要唤醒（因为它已经占锁了），
-    // 但为了代码健壮性，这里应该查不到 ConnectionTable（因为没传 inDev），
-    // 所以这个函数主要服务于 HEAD 包的仲裁。
-    return -1;
 }
 
 
@@ -152,10 +281,8 @@ uint32_t SwitchNode::DoLbLetflow(Ptr<Packet> p, CustomHeader &ch,
 
 /*-----------------DRILL-----------------*/
 uint32_t SwitchNode::CalculateInterfaceLoad(uint32_t interface) {
-    Ptr<QbbNetDevice> device = DynamicCast<QbbNetDevice>(m_devices[interface]);
-    NS_ASSERT_MSG(!!device && !!device->GetQueue(),
-                  "Error of getting a egress queue for calculating interface load");
-    return device->GetQueue()->GetNBytesTotal();  // also used in HPCC
+    // BEgressQueue 已移除，返回 0 (DRILL/HPCC 负载均衡未使用)
+    return 0;
 }
 
 uint32_t SwitchNode::DoLbDrill(Ptr<const Packet> p, const CustomHeader &ch,
@@ -192,170 +319,21 @@ uint32_t SwitchNode::DoLbConWeave(Ptr<const Packet> p, const CustomHeader &ch,
 }
 /*----------------------------------*/
 
-/********************************************
- *              MAIN LOGICS                 *
- *******************************************/
 
-
-bool SwitchNode::AttemptForward(Ptr<Packet> p, uint32_t inDev) {
-    
-    
-    // 1. 解析包类型
-    FlitHeader fh;
-    p->PeekHeader(fh);
-    uint32_t type = fh.GetType();
-    uint32_t outDev = -1;
-    // 【调试日志】
-    if (type == 0 || type == 3) {
-        std::cout << "[DEBUG] Head/Single Pkt at Node " << GetId() 
-                  << " inDev " << inDev << " Type=" << type << std::endl;
-    }
-    // 2. 确定出端口
-    if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {
-        SwitchDestTag destTag;
-        
-        // 【优化核心】：先看有没有缓存
-        if (p->PeekPacketTag(destTag)) {
-            // A. 命中缓存！直接拿结果，无需脱头
-            outDev = destTag.GetDest();
-        } 
-        else {
-            // B. 第一次处理（未命中）：执行昂贵的解析
-            
-            p->RemoveHeader(fh); // 移除 FlitHeader
-            
-            // 这里的 CustomHeader 构造可能需要根据你的实际情况调整参数
-            CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
-            
-            // 注意：PeekHeader 是不够的，GetOutDev 内部可能需要特定的 Header 结构
-            // 如果 GetOutDev 依赖 ch，确保这里正确提取了 ch
-            p->PeekHeader(ch); 
-            
-            p->AddHeader(fh); // 装回去
-            
-            // 查路由表
-            outDev = GetOutDev(p, ch);
-            
-            // 【关键】：把结果存入 Tag，下次就不用算了
-            destTag.SetDest(outDev);
-            p->AddPacketTag(destTag);
-        }
-        
-
-    } else {
-        // 查连接表 (Wormhole 机制)
-        // 假设你之前存了 connectionTable
-        outDev = m_connectionTable[inDev].outDev;
-    }
-    
-    // ---------------------------------------------------------
-    // 检查点 1: 端口占用检查 (Wormhole 锁)
-    // ---------------------------------------------------------
-    int32_t owner = m_portOccupancy[outDev];
-    bool isPortFree = (owner == -1);
-    bool isOwner = (owner == (int32_t)inDev);
-
-    // 如果我是 HEAD，且端口非空闲 -> 阻塞
-    if (type == 0 /*HEAD*/ || type == 3 /*SINGLE*/) {
-        if (!isPortFree) {
-            //std::cout << "Switch " << GetId() << ": Port " << outDev << " locked by " << owner << ". InDev " << inDev << " blocked." << std::endl;
-            
-            // 【关键修改】注册到“等待解锁”队列 (Wait for Lock)
-            
-            m_mmu->RegisterWaitPort(outDev, inDev); 
-            return false; 
-        }
-        //std::cout<<"我是head/single,indev是"<<inDev<<"outdev是 "<<outDev
-    }
-    // 如果我是 BODY/TAIL，但我不是 Owner -> 严重错误 (逻辑不一致)
-    else if (!isOwner) {
-        // 这通常不应该发生，除非路由表变了或者状态乱了
-        //std::cout << "CRITICAL ERROR: Body packet from " << inDev << " arrived but port " << outDev << " owned by " << owner << std::endl;
-        exit(1); 
-    }
-
-    // ---------------------------------------------------------
-    // 检查点 2: 空间不足检查 (Credit Check)
-    // ---------------------------------------------------------
-    // 注意：即使拿到锁了，如果没有空间，也发不出去！
-    if (!m_mmu->CheckEgressAdmission(outDev)) {
-        //std::cout << "Switch " << GetId() << ": Port " << outDev << " buffer full. InDev " << inDev << " blocked." << std::endl;
-        
-        // 【保持原样】注册到“等待空间”队列 (Wait for Space)
-        m_mmu->RegisterWaitSpace(outDev, inDev);
-        return false;
-    }
-    // ---------------------------------------------------------
-    // 通过所有检查 -> 发送
-    // ---------------------------------------------------------
-    
-    // 1. 如果是 HEAD，抢锁
-    if (type == 0 /*HEAD*/ && isPortFree) {
-        m_portOccupancy[outDev] = inDev;
-        m_connectionTable[inDev].outDev = outDev;
-        m_connectionTable[inDev].isValid = true;
-    }
-
-    // 2. 扣除 Credit，更新账本 (保持你的代码)
-    SwitchDestTag destTag;
-    p->RemovePacketTag(destTag);
-    m_mmu->UpdateEgressAdmission(outDev);
-
-    //m_mmu->RemoveFromIngressAdmission(inDev, 3, p->GetSize());//这个好像也不用改，就是一个记账的工作嘛
-
-    // 3. 释放上游 Credit (保持你的代码)
-    Ptr<NetDevice> baseDev = m_devices[inDev];
-    Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
-    if (qbbDev) {
-        qbbDev->ReleaseRxCredit(1);//release这个函数估计也要改一下
-    }
-     
-    // 4. 物理发送
-    CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
-    m_devices[outDev]->SwitchSend(3, p, ch);
-    //std::cout<<"switch   send!"<<std::endl;
-    m_txBytes[outDev] += p->GetSize();
-
-    // 5. 如果是 TAIL，解锁并唤醒等待锁的端口
-    if (type == 2 /*TAIL*/ || type == 3 /*SINGLE*/) {
-        if(!qbbDev->m_rxBuffer->IsEmpty()){//这个packet发送成功，但是这个端口还有数据的话，我也需要注册一下，要不然没人唤醒了
-            m_mmu->RegisterWaitPort(outDev, inDev);
-            m_mmu->m_ingressBlocked[inDev] = true;
-            //std::cout<<"虽然我是tail/single，但这个端口还有数据，所以我继续注册等待锁"<<std::endl;
-        }else{
-            m_mmu->m_ingressBlocked[inDev] = false;
-           //std::cout<<"我是tail/single，这个端口暂时没有数据了，所以我不注册等待锁了"<<std::endl;
-        }
-        m_portOccupancy[outDev] = -1; // 解锁
-        m_connectionTable[inDev].isValid = false;
-
-        // 【关键修改】唤醒那些因为“端口被锁”而阻塞的入端口
-        m_mmu->NotifyOutputPortFree(outDev); 
-    }
-
-    return true;
-}
-void SwitchNode::releasecredit(uint32_t outDev){
-    //
-   m_mmu->ReleaseEgressAdmission(outDev);
-}
+// void SwitchNode::releasecredit(uint32_t outDev){
+//     //
+//    m_mmu->ReleaseEgressAdmission(outDev);
+// }
 
 // This function can only be called in switch mode
 bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet,
                                          CustomHeader &ch) {
-    
-    uint32_t inDev = device->GetIfIndex();
-    //std::cout<<"我进到switch  "<<GetId()<<"了"<<",入端口是device "<<inDev<<",要执行mmu的ArbitrateAndSend函数了"<<std::endl;
-    m_mmu->ArbitrateAndSend(inDev);//这里直接调用转发函数就行了，尝试一下进行转发
+    // 新架构下，收包由 QbbNetDevice::Receive 处理，这里仅返回 true
     return true;
 }
 
 
-bool SwitchNode::cantransmit(int inDev){
-    Ptr<NetDevice> baseDev = m_devices[inDev];
-    Ptr<QbbNetDevice> qbbDev = DynamicCast<QbbNetDevice>(baseDev);
-    return qbbDev->cantransmit();
-}
+
 int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
     // look up entries
     auto entry = m_rtTable.find(ch.dip);
@@ -392,11 +370,7 @@ int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
     }
 }
 
-
-
-void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p) {//
-    
-
+void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p) {
     m_txBytes[ifIndex] += p->GetSize();
 }
 

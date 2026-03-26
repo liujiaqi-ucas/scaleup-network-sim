@@ -172,7 +172,7 @@ uint32_t RdmaHw::GetNicIdxOfQp(Ptr<RdmaQueuePair> qp) {
 
 uint64_t RdmaHw::GetQpKey(uint32_t dip, uint16_t sport, uint16_t dport,
                           uint16_t pg) {  // Sender perspective
-    return ((uint64_t)dip << 32) | ((uint64_t)sport << 16) | (uint64_t)dport | (uint64_t)pg;
+    return ((uint64_t)dip << 32) | ((uint64_t)sport << 16) | (uint64_t)dport ;
 }
 Ptr<RdmaQueuePair> RdmaHw::GetQp(uint64_t key) {
     auto it = m_qpMap.find(key);
@@ -222,11 +222,10 @@ void RdmaHw::DeleteQueuePair(Ptr<RdmaQueuePair> qp) {
 }
 
 // DATA UDP's src = this key's dst (receiver's dst)
-uint64_t RdmaHw::GetRxQpKey(uint32_t dip, uint16_t dport, uint16_t sport,
-                            uint16_t pg) {  // Receiver perspective
-    return ((uint64_t)dip << 32) | ((uint64_t)pg << 16) | ((uint64_t)sport << 16) |
-           (uint64_t)dport;  // srcIP, srcPort
-}
+uint64_t RdmaHw::GetRxQpKey(uint32_t dip, uint16_t dport, uint16_t sport,                                                                                                   
+                              uint16_t pg) {  // Receiver perspective
+      return ((uint64_t)dip << 32) | ((uint64_t)sport << 16) | (uint64_t)dport;                                                                                               
+  }       
 
 // src/dst are already flipped (this is calleld by UDP Data packet)
 Ptr<RdmaRxQueuePair> RdmaHw::GetRxQp(uint32_t sip, uint32_t dip, uint16_t sport, uint16_t dport,
@@ -384,7 +383,10 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     // 阶段 D: 精准数据累加 (Data Accumulation)
     // =========================================================
     uint32_t effectiveDataBytes = 0;
-
+    if (!rxQp) {                                                                                                                                                                
+      NS_LOG_WARN("ReceiveUdp: No cached RxQP for flit type " << (int)type << " on dev " << dev_idx);
+      return 1;                                                                                                                                                               
+  }    
     if (type == 0 || type == 3) { 
         // >>> HEAD 或 SINGLE 包 <<<
         // 结构: [FlitHeader | Protocol Headers (IP/UDP/etc) | Actual Data]
@@ -435,14 +437,14 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     // =========================================================
     // 阶段 F: 释放 Credit (流控)
     // =========================================================
-    uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
-    if (nic_idx < m_nic.size()) {
-        Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
-        if (dev) {
-            // 释放 1 个 Flit 的空间 (注意这里是按 Flit 个数释放，不是字节)
-            dev->ReleaseRxCredit(1); 
-        }
-    }
+    // uint32_t nic_idx = GetNicIdxOfRxQp(rxQp);
+    // if (nic_idx < m_nic.size()) {
+    //     Ptr<QbbNetDevice> dev = m_nic[nic_idx].dev;
+    //     if (dev) {
+    //         // 释放 1 个 Flit 的空间 (注意这里是按 Flit 个数释放，不是字节)
+    //         dev->ReleaseRxCredit(1); 
+    //     }
+    // }
 
     return 0;
 
