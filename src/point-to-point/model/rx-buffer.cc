@@ -38,12 +38,8 @@ uint16_t RxBuffer::GetIndex(uint16_t sn) const
 bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
 {
     // ---- 1. 溢出检查：sn 必须在窗口 [m_head, m_head + m_size) 内 ----
-    // 用有符号距离判断：dist > 0 表示 sn 在 m_head 之后
     int distFromHead = (int)(sn - m_head);
     if (distFromHead < 0 || distFromHead >= (int)m_size) {
-        std::cout << "StorePacket: SN=" << sn
-                    << " 超出窗口 [" << m_head
-                    << ", " << (uint16_t)(m_head + m_size) << ")，丢弃" << std::endl;
         return false;
     }
 
@@ -51,7 +47,6 @@ bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
 
     // ---- 2. 重复检查 ----
     if (m_buffer[idx].occupied && m_buffer[idx].storedSn == sn) {
-        std::cout << "StorePacket: SN=" << sn << " 重复收到，忽略" << std::endl;
         return false;
     }
 
@@ -71,20 +66,11 @@ bool RxBuffer::StorePacket(uint16_t sn, Ptr<Packet> p)
     m_count++;
 
     // ---- 5. 更新尾指针（保持 m_tail = max已收SN + 1） ----
-    // 如果新 sn 比当前 m_tail 更靠后，推进 m_tail
     int distFromTail = (int)(sn - m_tail);
-    std::cout << "  [TAIL更新检查] sn=" << sn 
-              << " m_tail(更新前)=" << m_tail 
-              << " distFromTail=" << distFromTail;
     if (distFromTail >= 0) {
         m_tail = (uint16_t)(sn + 1);
-        std::cout << " → m_tail(更新后)=" << m_tail;
-    } else {
-        std::cout << " → 未更新(distFromTail<0)";
     }
 
-    std::cout << "StorePacket: SN=" << sn << " idx=" << idx
-              << " count=" << m_count << std::endl;
     return true;
 }
 
@@ -114,13 +100,10 @@ uint16_t RxBuffer::CommitHead()
     // 清理槽位
     m_buffer[idx].pkt      = nullptr;
     m_buffer[idx].occupied = false;
-    // storedSn 不清零，留着也无妨（occupied=false 已保护）
 
     m_count--;
-    m_head = (uint16_t)(m_head + 1); // 推进头指针（自动回绕）
+    m_head = (uint16_t)(m_head + 1);
 
-    std::cout << "CommitHead: committed SN=" << committed
-              << " new head=" << m_head << std::endl;
     return committed;
 }
 
@@ -150,7 +133,6 @@ uint32_t RxBuffer::CommitContiguous(std::vector<Ptr<Packet>>& outPackets)
 bool RxBuffer::IsReceived(uint16_t sn) const
 {
     uint16_t idx = GetIndex(sn);
-    // 必须同时检查 occupied 和 storedSn，防止环形假命中
     return m_buffer[idx].occupied && m_buffer[idx].storedSn == sn;
 }
 
@@ -192,18 +174,14 @@ void RxBuffer::PrintDebugState() const
               << "  tail=" << m_tail
               << std::endl;
 
-    // 如果 head == tail，说明缓冲区里没有任何数据
     if (m_head == m_tail || m_count == 0) {
         std::cout << "  [缓冲区为空]" << std::endl;
         std::cout << "=========================" << std::endl;
         return;
     }
 
-    // 从 head 打印到 tail-1
-    // 计算跨度，防止 tail < head（正常不会发生，但加个保护）
     uint16_t span = (uint16_t)(m_tail - m_head);
     if (span > m_size) {
-        // 不应发生，但保护一下
         span = m_size;
     }
 
@@ -232,7 +210,6 @@ void RxBuffer::PrintDebugState() const
             std::cout << "✗  缺失 ← 待重传";
         }
 
-        // 标注 head 和 tail
         if (sn == m_head)            std::cout << "  ← HEAD";
         if (sn == (uint16_t)(m_tail - 1)) std::cout << "  ← TAIL(最后收到)";
 

@@ -11,31 +11,7 @@
 
 namespace ns3 {
 
-    // 定义一个简单的 Tag 用来缓存出端口
-class SwitchDestTag : public Tag {
-public:
-    static TypeId GetTypeId(void) {
-        static TypeId tid = TypeId("ns3::SwitchDestTag")
-            .SetParent<Tag>()
-            .AddConstructor<SwitchDestTag>();
-        return tid;
-    }
-    virtual TypeId GetInstanceTypeId(void) const { return GetTypeId(); }
-    virtual uint32_t GetSerializedSize(void) const { return sizeof(uint32_t); }
     
-    // 序列化：把 outDev 写入流
-    virtual void Serialize(TagBuffer i) const { i.WriteU32(m_outDev); }
-    // 反序列化：从流读取 outDev
-    virtual void Deserialize(TagBuffer i) { m_outDev = i.ReadU32(); }
-    virtual void Print(std::ostream &os) const { os << "Dest=" << m_outDev; }
-
-    // 存取接口
-    void SetDest(uint32_t port) { m_outDev = port; }
-    uint32_t GetDest() const { return m_outDev; }
-
-private:
-    uint32_t m_outDev;
-};
 // 转发请求的返回状态
 enum ForwardStatus {
     FORWARD_SUCCESS = 0,
@@ -60,9 +36,6 @@ class SwitchNode : public Node {
 
     // monitor uplinks
     uint64_t m_txBytes[pCnt];  // counter of tx bytes, for HPCC
-    // 【新增】连接表
-    // 维度: [入端口数量][VC数量] -> 映射到 出端口信息
-    SwitchConnection m_connectionTable[pCnt];
     
    protected:
     bool m_ecnEnabled;
@@ -72,21 +45,12 @@ class SwitchNode : public Node {
    private:
     uint32_t LookupRoutingTable(Ptr<Packet> flit); // 【新增】包装器
     int GetOutDev(Ptr<Packet>, CustomHeader &ch);
-    void SendToDev(Ptr<Packet> p, CustomHeader &ch);
-    void SendToDevContinue(Ptr<Packet> p, CustomHeader &ch);
+    
     static uint32_t EcmpHash(const uint8_t *key, size_t len, uint32_t seed);
     
-    // 【新增】 绝对值流控账本 (累计释放量)
-    // 维度: [入端口][队列]
-    uint64_t m_cumulativeFreedBytes[pCnt][qCnt];
     /* Sending packet to Egress port */
     void DoSwitchSend(Ptr<Packet> p, uint32_t outDev, uint32_t qIndex);
    
-   
-    // 【出端口占用锁】
-    // m_portOccupancy[outDev] = inDev
-    // -1 表示空闲；否则表示被入端口 inDev 独占
-    int32_t m_portOccupancy[pCnt];
 
 
     /*----- Load balancer -----*/
@@ -123,13 +87,6 @@ class SwitchNode : public Node {
     bool SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet, CustomHeader &ch);
     void SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Packet> p);
     uint64_t GetTxBytesOutDev(uint32_t outdev);
-    // 【仲裁接口】尝试转发
-    // 返回 true 表示成功拿到锁并发送；false 表示忙
-    bool AttemptForward(Ptr<Packet> p, uint32_t inDev);
-
-    // 辅助函数：只查路由，不发送 (用于 MMU 唤醒时偷看目的地)
-    int32_t GetPacketDest(Ptr<Packet> p);
-    bool cantransmit(int inDev);//判断指定端口的包目前能否转发，丢包条件下的
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // 互斥锁数组：记录每个 TX 端口当前被哪个 RX 端口“霸占”？
     // 大小为 m_numPorts，值为 -1 表示空闲，值为 rxPortId 表示被锁

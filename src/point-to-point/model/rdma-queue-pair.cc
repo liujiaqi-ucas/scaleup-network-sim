@@ -94,6 +94,7 @@ RdmaRxQueuePair::RdmaRxQueuePair() {
     m_size=0;
     // 【新增】初始化
     received_bytes = 0;
+    m_finished = false;
 }
 
 uint32_t RdmaRxQueuePair::GetHash(void) {

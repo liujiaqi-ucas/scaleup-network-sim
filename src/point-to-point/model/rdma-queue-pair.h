@@ -87,7 +87,8 @@ class RdmaRxQueuePair : public Object {  // Rx side queue pair
     uint64_t m_size;
     // 【新增】实际接收到的纯数据字节数 (Accumulator)
     uint64_t received_bytes;
-    
+    bool m_finished;  // 流完成标志，防止重复触发回调
+
     static TypeId GetTypeId(void);
     RdmaRxQueuePair();
     uint32_t GetHash(void);

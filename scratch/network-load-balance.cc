@@ -282,7 +282,8 @@ void ExecuteStep(uint32_t stepId) {
 
         ApplicationContainer appCon = clientHelper.Install(n.Get(task.src));
         appCon.Start(Seconds(0)); 
-        std::cout << "  -> Started Flow: " << task.src << "->" << task.dst 
+
+        std::cout << "  -> Started Flow: " << task.src << "->" << task.dst
                   << " (Size: " << task.size << ")" << std::endl;
     }
 }
@@ -728,6 +729,15 @@ void stop_simulation_middle() {
         return;
     }
 
+    // 每 1ms 打印一次进度（每 10 次检查打一次，避免刷屏）
+    // static uint32_t check_count = 0;
+    // if (++check_count % 10 == 0) {
+    //     std::cout << "[Progress] Time=" << Simulator::Now()
+    //               << " finished=" << Settings::cnt_finished_flows
+    //               << "/" << target_flow_num
+    //               << " active_step=" << current_active_step
+    //               << "/" << max_step_id << std::endl;
+    // }
     Simulator::Schedule(MicroSeconds(100), &stop_simulation_middle);  // check every 100us
 }
 
@@ -1511,6 +1521,9 @@ std::cout<<"333333333"<<std::endl;
         // because we want our IP to be the primary IP (first in the IP address list),
         // so that the global routing is based on our IP
         NetDeviceContainer d = qbb.Install(snode, dnode);
+        // 在属性系统设置完成后，初始化 credit 相关状态
+        //DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
+        //DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
         if (snode->GetNodeType() == 0) {
             Ptr<Ipv4> ipv4 = snode->GetObject<Ipv4>();
             ipv4->AddInterface(d.Get(0));
@@ -1575,6 +1588,10 @@ std::cout<<"333333333"<<std::endl;
             uint32_t shift = 3;  // by default 1/8
             for (uint32_t j = 1; j < sw->GetNDevices(); j++) {
                 Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(sw->GetDevice(j));
+                // 关键：把交换机指针和端口号告诉每个网卡
+                dev->m_switchNode = GetPointer(sw);
+                dev->m_portId = j;
+                dev->m_mmu = sw->m_mmu;
                 // set ecn
                 uint64_t rate = dev->GetDataRate().GetBitRate();
                 NS_ASSERT_MSG(rate2kmin.find(rate) != rate2kmin.end(),
@@ -1729,6 +1746,21 @@ std::cout<<"333333333"<<std::endl;
      * @brief setup routing
      */
     CalculateRoutes(n);
+    // Debug: check IP assignments before routing
+    for (uint32_t i = 0; i < node_num; i++) {
+        Ptr<Ipv4> ipv4obj = n.Get(i)->GetObject<Ipv4>();
+        if (ipv4obj) {
+            uint32_t nIface = ipv4obj->GetNInterfaces();
+            for (uint32_t j = 0; j < nIface; j++) {
+                uint32_t nAddr = ipv4obj->GetNAddresses(j);
+                for (uint32_t k = 0; k < nAddr; k++) {
+                    // fprintf(stderr, "[DBG-IP] Node %u type=%u iface=%u addr[%u]=%x\n",
+                    //         i, n.Get(i)->GetNodeType(), j, k,
+                    //         ipv4obj->GetAddress(j, k).GetLocal().Get());
+                }
+            }
+        }
+    }
     SetRoutingEntries();
 
     /**

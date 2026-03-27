@@ -37,6 +37,7 @@ TypeId SwitchNode::GetTypeId(void) {
 SwitchNode::~SwitchNode() {}
 
 SwitchNode::SwitchNode() {
+    m_node_type = 1;  // 标记为交换机节点
     m_mmu = CreateObject<SwitchMmu>();
     m_mmu->SetNode(this);
     m_ecmpSeed = m_id;
@@ -50,41 +51,7 @@ SwitchNode::SwitchNode() {
     // 【极其重要的初始化】：防止一开始锁死和越界
     m_txPortLocks.resize(pCnt, -1);
     m_rxActiveRoutes.resize(pCnt, -1);
-    // 1. 先创建对象！
-    // m_mmu = CreateObject<SwitchMmu>();
     
-    // // 2. 只有创建了之后，才能调用它的方法
-    // m_mmu->SetNode(this);
-    // m_ecmpSeed = m_id;
-    // m_isToR = false;
-    // m_node_type = 1;
-    // m_isToR = false;
-    // m_drill_candidate = 2;
-    
-    // Conga's Callback for switch functions
-    //m_mmu->m_congaRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
-    //m_mmu->m_congaRouting.SetSwitchSendToDevCallback(
-        //MakeCallback(&SwitchNode::SendToDevContinue, this));
-    // ConWeave's Callback for switch functions
-    //m_mmu->m_conweaveRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
-    //m_mmu->m_conweaveRouting.SetSwitchSendToDevCallback(
-        //MakeCallback(&SwitchNode::SendToDevContinue, this));
-// 你的逻辑依赖于 -1 代表空闲，如果不初始化，里面是随机垃圾值，一开始就会导致锁死
-    // for (uint32_t i = 0; i < pCnt; i++) {
-    //     m_portOccupancy[i] = -1; 
-    // }
-    // for (uint32_t i = 0; i < pCnt; i++) {
-    //     m_txBytes[i] = 0;
-    // }
-    // // 初始化账本
-    // for(int i=0; i<pCnt; i++)
-    //     for(int j=0; j<qCnt; j++)
-    //         m_cumulativeFreedBytes[i][j] = 0;
-    // for (uint32_t i = 0; i < pCnt; i++) {
-    //     m_connectionTable[i].outDev = 0;     // 设为0或安全值
-    //     m_connectionTable[i].qIndex = 0;
-    //     m_connectionTable[i].isValid = false; // 必须标记为无效！
-    // }
 }
 // =========================================================
 // 【新增桥接函数】：剥离 Flit 头部去查 IP 路由表

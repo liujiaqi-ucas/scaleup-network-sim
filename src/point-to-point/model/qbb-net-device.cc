@@ -248,27 +248,27 @@ QbbNetDevice::QbbNetDevice() {
     }
     m_txTotalSent = 0;
     // m_creditInit 此时已被 ns-3 属性系统设好 (默认 256)
-    m_bufferSize = m_creditInit;
-    m_rxCumulativeFreed = m_creditInit;
-    creditflag=true;
+    m_bufferSize = 256;//rx的buffer大小，单位是flit
+    m_rxCumulativeFreed = 0;//我这边累计接收/释放了多少，初始一个也没接收，所以是0
+    creditflag=false;//表示现在没有待发送给接收端的信用更新的，因为初始的信用已经设置好了
     m_rdmaEQ = CreateObject<RdmaEgressQueue>();
-    m_next_seq_num = 0;
-    m_last_acked_seq = 0;
-    m_currentleftsize = 0;
-    m_totalFlits = 0;
-    m_currentFlitIdx = 0;
-    nakflag = false;
-    nakseq = 0;
+    m_next_seq_num = 0;//下一个要分配的flit的序号，从0开始
+    //m_last_acked_seq = 0;
+    m_currentleftsize = 0;//端侧用的，当前正在切的包还剩多少字节没切了
+    //m_totalFlits = 0;//好像没啥用
+    m_currentFlitIdx = 0;//端侧用的，当前正在切的包已经切了多少个flit了
+    nakflag = false;//表示现在没有nak要发
+    nakseq = 0;//如果有nak要发，这个nak是针对哪个序号的
     nakbitmapHigh = 0;
     nakbitmapLow = 0;
-    m_rxBuffer = Create<RxBuffer>(m_creditInit);
-    m_mmu = nullptr;
-    m_switchNode = nullptr;
+    m_rxBuffer = Create<RxBuffer>(256);//初始化构造rxbuffer，容量等于初始信用（单位是flit）
+    m_mmu = nullptr;//这里得看一下switchnode怎么赋值的
+    m_switchNode = nullptr;//这里得看一下switchnode怎么赋值的
     m_portId = 0;
-    m_rxStalled = false;
-    m_last_acked_seq = 0;
+    m_rxStalled = false;//我当前是否被大老板 (锁或 MMU) 卡住了？初始没有，所以是 false
+    //m_last_acked_seq = 0;
     m_rxNext = 0;
-    m_txLimit = 0;
+    m_txLimit = 256;//目前下游限制我发多少
 }
 
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
@@ -428,7 +428,7 @@ void QbbNetDevice::ReleaseRxCredit(uint16_t flitsFreed) {
      }
 }
 void QbbNetDevice::SendNextFlit() {  // 这个目前只是端侧的逻辑，
-    
+    std::cout<<"Node "<<m_node->GetId()<<" device  "<<m_ifIndex<<"执行了sendnextflit函数"<<std::endl;
     NS_LOG_FUNCTION(this);
 
     // 0. 安全检查：如果没有大包在发，直接返回
@@ -683,7 +683,7 @@ void QbbNetDevice::piggycredit(Ptr<Packet> p) {
 
     if (creditflag) {
         p->RemoveHeader(fh);
-        fh.SetCredit(0, m_rxCumulativeFreed);
+        fh.SetCredit(0, m_rxCumulativeFreed+m_bufferSize);
         p->AddHeader(fh);
         creditflag = false;
     }
@@ -717,7 +717,7 @@ void QbbNetDevice::generteStandaloneControl() {
             // 即使是专门发 ACK 的包，也别忘了把最新的信用带上
             if (creditflag) {
                 //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"同时有流控信息也要发"<<std::endl;
-                fh.SetCredit(0, m_rxCumulativeFreed); // 填入你的接收端释放计数
+                fh.SetCredit(0, m_rxCumulativeFreed+m_bufferSize); // 填入你的接收端释放计数
                 creditflag = false; // 既然发出去了，标志位清零
             }
 
@@ -748,7 +748,7 @@ void QbbNetDevice::generteStandaloneControl() {
         FlitHeader fh;
         fh.SetType(3);
         fh.SetVcId(0);
-        fh.SetCredit(0, m_rxCumulativeFreed);
+        fh.SetCredit(0, m_rxCumulativeFreed+m_bufferSize);
         p->AddHeader(fh);
         CommonHeader co;
         co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
@@ -767,6 +767,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
     // 2. 端侧逻辑 (Server/NIC)
     // ============================================================
     if (m_node->GetNodeType() == 0) {
+        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"进入DequeueAndTransmit函数"<<std::endl;
         //先检查有没有nak要发，nak是优先级最高的
          if(nakflag){
             
@@ -783,7 +784,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
             return;
         }
         
-        
+        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"检查完nak了，继续检查ack和credit"<<std::endl;
         // 再检查重传队列
     // 再检查重传队列 (统一逻辑：端侧和交换机侧共用)
       if (!m_retransQueue.empty()) {
@@ -823,17 +824,20 @@ void QbbNetDevice::DequeueAndTransmit(void) {
           }
           return;
       }
+
     // 再检查有没有没切完的包
    if (m_currentLargePacket != nullptr) {
+    //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"当前有大包正在切片，继续切片"<<std::endl;
             SendNextFlit();  // 切下一刀并发出去
             return;          // 直接返回，不要去调度新包
     }else {
+        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"当前没有大包正在切片，去调度新包"<<std::endl;
             // A. 询问调度器：下一个轮到谁？
             // 注意：GetNextQindex 只是计算，不会把包取出来，也不会改变 QP 状态
             int qIndex = m_rdmaEQ->GetNextQindex();
 
             if (qIndex != -1024) {  // 有队列需要发送 (ACK队列 还有 普通数据队列)
-
+                std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"调度器给了我一个需要发送的队列，队列索引是"<<qIndex<<std::endl;
                 uint32_t requiredFlits = 0;
                 
                 
@@ -862,12 +866,14 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                 // 3. [核心] 包级流控检查
                 uint16_t sent = (uint16_t)m_txTotalSent;
                 uint16_t limit = m_txLimit;//
-
+               //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查，累计将要发送"<<m_txTotalSent<<"个flit"
+                    //<<"   下游目前让我发 "<<m_txLimit<<"个flit"<<std::endl;
                 // 2. 【关键】计算剩余信用 (利用无符号减法的回绕特性)
                 int16_t available = (int16_t)(limit - sent);
+                //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查，剩余信用是 "<<available<<"个flit"<<std::endl;
                 if (available >= (int16_t)requiredFlits) {
                     // >>>>>> 钱够了！允许产生包 >>>>>>
-
+                    //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查通过，信用够发这个包了，我要发了"<<std::endl;
                     // a. 真正产生包 (此时 QP 的 snd_nxt 才会增加)真增加了吗，这个得去看看
                     Ptr<Packet> p = m_rdmaEQ->DequeueQindex(qIndex);  // 调用这个函数才会更新qp轮询的那个值
                     CustomHeader qw(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
@@ -884,112 +890,28 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                     m_rdmaPktSent(qp, p, m_tInterframeGap);//这个真的有用吗,现在除了这个其他的都能确认了
                          // e. 启动切片状态机
                         m_currentLargePacket = p;
-                        m_totalFlits = requiredFlits;  // 也可以用 p->GetSize() 再算一次更精确的
+                        //m_totalFlits = requiredFlits;  // 也可以用 p->GetSize() 再算一次更精确的
                         m_currentFlitIdx = 0;
                         m_currentleftsize = m_totalBytes;
                         SendNextFlit();
                         return;
-                } 
-                else {
-                    //std::cout<<" Node  "<<m_node->GetId()<<"的device "<<m_ifIndex<<"被信用阻塞了"<<std::endl;
-
-                    // >>>>>> 钱不够！拒绝产生包 >>>>>>
-                    //下一次dequeue会继续调用这个，不用担心卡死
-                    // 什么都不做！不调用 DequeueQindex，QP 状态保持原样。
-                    // 此时函数直接返回。
-                    //
-                    // 后果：
-                    // 1. Round-Robin 指针不会更新。
-                    // 2. 下次 GetNextQindex 还是会选中这个 QP。
-                    // 3. 造成 Head-of-Line 阻塞，直到 Receive 函数收到 Credit 并唤醒
-                    // DequeueAndTransmit。 这正是你要的“包级流控”效果。
-
-                    //return;
+                } else{
+                    // >>>>>> 钱不够！不能发 >>>>>>>
+                    //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查不通过，信用不够发这个包，我不能发了"<<std::endl;
                 }
+                
             }else{
                 //代表没有东西要发送，那就得判断一下是不是又ack或者credit的需求了
-                
+                //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"调度器没有给我需要发送的队列了"<<std::endl;
             }
             //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"转发队列目前是空，我要看看有没有ack或者credit需求"<<std::endl;
          // 没包可发 (队列空 或 被流控阻塞)
         // 检查是否有欠下的 ACK 需要单独发送 (兜底机制)
         // 还得检查是不是有 credit 要发送
+        generteStandaloneControl();
+        //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<" standalone control检查完毕，退出DequeueAndTransmit函数"<<std::endl;
+         return;
         
-        // 遍历 8 个 VC，防止跨 VC 阻塞
-        for (uint32_t i = 0; i < 8; i++) {
-        
-        // 检查两个条件：
-        // 1. 是否有 ACK/NAK 要发 (m_ctrl_state)
-        // 2. 是否有 Credit 要发 (creditflag) —— 即使没有 ACK，光发 Credit 也是有意义的
-        
-        bool need_ack_nak = (m_ctrl_state[i] == CTRL_ACK);
-        
-        // 如果有控制信息，或者 (作为优化) 刚好有 Credit 且这是一个活跃的 VC
-        if (need_ack_nak) {
-            //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"有控制信息要发"<<std::endl;
-            //NS_LOG_LOGIC("Creating Standalone Control Packet for VC " << i);
-
-            // 1. 造空包 (Payload Size = 0)
-             p = Create<Packet>(0);
-
-            // 2. 准备头部
-            FlitHeader fh;
-            fh.SetType(3);   // TYPE = 3 (SINGLE)，表示单帧控制包
-            fh.SetVcId(i);   // 填入对应的 VC
-            fh.SetSeqNum(0); // 控制包不消耗 GBN 序号，填 0
-            
-           
-            fh.SetAck(m_ctrl_seq[i]);  // 标记为 ACK，填入确认序号
-            NS_LOG_INFO("Sending Standalone ACK for VC " << i << " Seq " << m_ctrl_seq[i]);
-            
-
-            // 4. 填入 Credit 信息 (顺便捎带)
-            // 即使是专门发 ACK 的包，也别忘了把最新的信用带上
-            if (creditflag) {
-                //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"同时有流控信息也要发"<<std::endl;
-                fh.SetCredit(0, m_rxCumulativeFreed); // 填入你的接收端释放计数
-                creditflag = false; // 既然发出去了，标志位清零
-            }
-
-            // 5. 封包
-            p->AddHeader(fh);
-            CommonHeader co;
-            co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
-            p->AddHeader(co);
-            // 6. 清除状态
-            // 这个 ACK/NAK 已经随包发出了，任务完成
-            m_ctrl_state[i] = CTRL_NONE;
-
-            // 7. 发射！
-            // TransmitStart 会设置 BUSY，并安排发送完成事件
-            TransmitStart(p);
-            
-            // 重要：一次回调只发一个包。
-            // 物理层变 BUSY 了，必须 return。
-            // 等发完这个包，TransmitComplete 会再次调用 DequeueAndTransmit 处理剩下的。
-            return; 
-        }
-    }
-    
-    // 补充情况：如果没有 ACK/NAK，但有 Credit 急需发送 (避免死锁)
-    // 如果 creditflag 为 true，且上面循环没触发发送
-    if (creditflag) {
-        //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"目前只有信用需要单独发送，m_rxCumulativeFreed是   "<<m_rxCumulativeFreed<<std::endl;
-        // 随便找一个 VC (通常是 0) 发送纯 Credit Update
-        p = Create<Packet>(0);
-        FlitHeader fh;
-        fh.SetType(3);
-        fh.SetVcId(0);
-        fh.SetCredit(0, m_rxCumulativeFreed);
-        p->AddHeader(fh);
-        CommonHeader co;
-        co.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
-        p->AddHeader(co);
-        creditflag = false;
-        TransmitStart(p);
-        return;
-    }
-    return;
         }
     }  // =========================================================
        // 场景 2: Switch (交换机) - 【融合流控版】
@@ -1308,7 +1230,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
 
     // 1. 处理对方捎带过来的 ACK/NACK
     if (fh.HasAck()) {  // 如果有捎带ack/nak的话
-        //std::cout<<"Node "<<m_node->GetId()<<"收到了ack，序号是"<<fh.GetAckSeq()<<std::endl;
+        std::cout<<"Node "<<m_node->GetId()<<"收到了ack，序号是"<<fh.GetAckSeq()<<std::endl;
         //ProcessAck(fh.GetAckSeq());
         HandleCumulativeACK(fh.GetAckSeq());
         fh.setackflag(0);//收到捎带之后需要把这个捎带标记清除，要不然可能会让下游产生误解
@@ -1318,7 +1240,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         fh.setcreditflag(0);
         uint16_t currentCredit = fh.GetCreditLimit();
         m_txLimit = currentCredit;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了下游的流控回复   "<<"现在的信用限制是"<<m_txLimit<<std::endl;
+        std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了下游的流控回复   "<<"现在的信用限制是"<<m_txLimit<<std::endl;
         
         //std::cout<<"Node "<<m_node->GetId()<<" device  "<<m_ifIndex<<"因为收到流控要触发dequeue了"<<std::endl;
         //DequeueAndTransmit();  // 有信用了重试一下发送

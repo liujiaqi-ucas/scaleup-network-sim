@@ -164,7 +164,7 @@ def main():
     parser.add_argument('--bw', dest="bw", action='store',
                         default='200', help="the NIC bandwidth (Gbps) (default: 100)")
     parser.add_argument('--topo', dest='topo', action='store',
-                        default='leaf_spine_128_100G', help="the name of the topology file (default: leaf_spine_128_100G_OS2)")
+                        default='H100_8_300G_OS2', help="the name of the topology file (default: H100_8_300G_OS2)")
     parser.add_argument('--cdf', dest='cdf', action='store',
                         default='AliStorage2019', help="the name of the cdf file (default: AliStorage2019)")
     parser.add_argument('--enforce_win', dest='enforce_win', action='store',

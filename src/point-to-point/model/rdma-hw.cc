@@ -187,17 +187,18 @@ Ptr<RdmaQueuePair> RdmaHw::GetQp(uint64_t key) {
 void RdmaHw::AddQueuePair(uint64_t size, uint16_t pg, Ipv4Address sip, Ipv4Address dip,
                           uint16_t sport, uint16_t dport, uint32_t win, uint64_t baseRtt,
                           int32_t flow_id) {
+    fprintf(stderr, "[DBG-AQP] Creating QP: sip=%x dip=%x sport=%u dport=%u size=%lu pg=%u\n",
+            sip.Get(), dip.Get(), sport, dport, size, pg);
     // create qp
     Ptr<RdmaQueuePair> qp = CreateObject<RdmaQueuePair>(pg, sip, dip, sport, dport);
     qp->SetSize(size);
-    //qp->SetWin(win);
-    //qp->SetBaseRtt(baseRtt);
-    //qp->SetVarWin(m_var_win);
     qp->SetFlowId(flow_id);
-    //qp->SetTimeout(m_waitAckTimeout);
 
     // add qp
+    fprintf(stderr, "[DBG-AQP] Getting NIC idx for dip=%x, rtTable entries=%lu\n",
+            dip.Get(), (unsigned long)m_rtTable[dip.Get()].size());
     uint32_t nic_idx = GetNicIdxOfQp(qp);
+    fprintf(stderr, "[DBG-AQP] nic_idx=%u, m_nic.size()=%lu\n", nic_idx, (unsigned long)m_nic.size());
     m_nic[nic_idx].qpGrp->AddQp(qp);
     uint64_t key = GetQpKey(dip.Get(), sport, dport, pg);
     m_qpMap[key] = qp;
@@ -206,7 +207,9 @@ void RdmaHw::AddQueuePair(uint64_t size, uint16_t pg, Ipv4Address sip, Ipv4Addre
     qp->m_rate = m_bps;
     qp->m_max_rate = m_bps;
     // Notify Nic
+    fprintf(stderr, "[DBG-AQP] Calling NewQp\n");
     m_nic[nic_idx].dev->NewQp(qp);
+    fprintf(stderr, "[DBG-AQP] NewQp returned\n");
 }
 
 void RdmaHw::DeleteQueuePair(Ptr<RdmaQueuePair> qp) {
@@ -420,8 +423,9 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     // =========================================================
     // 只有当 累计接收的数据量 >= 预设的总大小时，才算真正结束
     // 且必须知道 m_size (防止 m_size 为 0 时的误判)
-    if (rxQp->m_size > 0 && rxQp->received_bytes >= rxQp->m_size) {
-        
+    if (rxQp->m_size > 0 && rxQp->received_bytes >= rxQp->m_size && !rxQp->m_finished) {
+        rxQp->m_finished = true;  // 防止重复触发
+
         std::cout << "!!! FLOW FINISH DETECTED FlowID: " << rxQp->m_flow_id << std::endl;
 
         if (flowStartTime > 0 && !m_rxFlowCompleteCb.IsNull()) {
@@ -430,8 +434,6 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
         } else {
             NS_LOG_WARN("Flow finished but missing start time tag!");
         }
-        
-        
     }
 
     // =========================================================
@@ -586,6 +588,8 @@ void RdmaHw::SetLinkDown(Ptr<QbbNetDevice> dev) {
 
 void RdmaHw::AddTableEntry(Ipv4Address &dstAddr, uint32_t intf_idx) {
     uint32_t dip = dstAddr.Get();
+    fprintf(stderr, "[DBG-RT] Node %u AddTableEntry: dstIP=%x iface=%u\n",
+            m_node->GetId(), dip, intf_idx);
     m_rtTable[dip].push_back(intf_idx);
 }
 
@@ -613,7 +617,7 @@ Ptr<Packet> RdmaHw::GetNxtPacket(Ptr<RdmaQueuePair> qp) {
     if (m_mtu < payload_size) {  // possibly last packet
         payload_size = m_mtu;
     }
-    std::cout<<"MTU="<<m_mtu<<std::endl;
+    //std::cout<<"MTU="<<m_mtu<<std::endl;
     uint32_t seq = (uint32_t)qp->snd_nxt;//一定要确保snd_nxt这个正常更新
     bool proceed_snd_nxt = true;
     qp->stat.txTotalPkts += 1;
