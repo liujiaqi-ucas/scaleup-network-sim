@@ -310,7 +310,21 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
     uint32_t rawPayloadSize = p->GetSize() - fh.GetSerializedSize();
 
     // 初始化 QP 指针
-    Ptr<RdmaRxQueuePair> rxQp = m_currentRxQpPerDev[dev_idx];
+    // 对 BODY/TAIL flit：优先用 FlowIDNUMTag 精确查找 QP，避免多流交错时记账到错误 QP
+    Ptr<RdmaRxQueuePair> rxQp = nullptr;
+    if (type == 1 || type == 2) { // BODY or TAIL
+        FlowIDNUMTag fint_lookup;
+        if (p->PeekPacketTag(fint_lookup)) {
+            int32_t fid = (int32_t)fint_lookup.GetId();
+            auto it = m_flowIdToRxQp.find(fid);
+            if (it != m_flowIdToRxQp.end()) {
+                rxQp = it->second;
+            }
+        }
+    }
+    if (!rxQp) {
+        rxQp = m_currentRxQpPerDev[dev_idx]; // HEAD/SINGLE 或找不到时的回退
+    }
     uint32_t nodeId = m_node->GetId();
 
     // =========================================================
@@ -346,6 +360,10 @@ int RdmaHw::ReceiveUdp(Ptr<Packet> p, CustomHeader &ch,uint32_t dev_idx) {
         if (p->PeekPacketTag(fit)) {
             rxQp->m_flow_id = fit.GetId();
         }
+    }
+    // 注册 flow_id → QP 映射，供后续 BODY/TAIL flit 精确查找
+    if (rxQp->m_flow_id >= 0) {
+        m_flowIdToRxQp[(int32_t)rxQp->m_flow_id] = rxQp;
     }
     //std::cout<<"rxQp->expected_seq要加的fh.GetPktTotalBytes()  =  "<<fh.GetPktTotalBytes()<<std::endl;
     rxQp->expected_seq+=fh.GetPktTotalBytes(); // 更新期望的下一个序号

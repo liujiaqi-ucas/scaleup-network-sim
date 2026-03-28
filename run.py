@@ -129,8 +129,8 @@ topo2bdp = {
 # credit_init: 初始信用 = RxBuffer 容量 (flit 数)
 # rto_us: RTO 超时值 (微秒)
 topo2linklayer = {
-    "H100_8_300G_OS2":        {"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 20},
-    "twoserver_oneswitch_OS2":{"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 20},
+    "H100_8_300G_OS2":        {"mmu_pool_size": 65536, "mmu_min_guarantee": 64,  "credit_init": 4096, "rto_us": 500},
+    "twoserver_oneswitch_OS2":{"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 64, "rto_us": 500},
     "NVL72_72_800G_OS2":      {"mmu_pool_size": 16384, "mmu_min_guarantee": 32,  "credit_init": 192, "rto_us": 5},
     "leaf_spine_128_100G_OS2":{"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
     "fat_k8_100G_OS2":        {"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
@@ -265,7 +265,7 @@ def main():
     # --- [修改 ] 强制使用手动生成的 Scale-up 流量文件 ---
     # 这里填写你在 gen_scaleup_traffic.py 里生成的文件名（不带 .txt）
     # 如果你想跑 All-to-All，就改成 flow_alltoall
-    target_flow_name = "flow_alltoall"
+    target_flow_name = "flow_allreduce"
     
     flow = target_flow_name
     flow_file_path = os.getcwd() + "/config/" + flow + ".txt"

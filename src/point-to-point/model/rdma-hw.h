@@ -33,7 +33,8 @@ class RdmaHw : public Object {
     static TypeId GetTypeId(void);
     RdmaHw();
     //Ptr<RdmaRxQueuePair> m_currentRxQp; // 用于缓存当前正在接收的 QP
-    std::unordered_map<uint32_t, Ptr<RdmaRxQueuePair>> m_currentRxQpPerDev; 
+    std::unordered_map<uint32_t, Ptr<RdmaRxQueuePair>> m_currentRxQpPerDev;
+    std::unordered_map<int32_t, Ptr<RdmaRxQueuePair>> m_flowIdToRxQp; // flow_id → QP，用于BODY/TAIL flit跨流查找
     Ptr<Node> m_node;
     DataRate m_minRate;  //< Min sending rate
     uint32_t m_mtu;

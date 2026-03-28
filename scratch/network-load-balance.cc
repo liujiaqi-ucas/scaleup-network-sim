@@ -86,7 +86,7 @@ uint32_t packet_payload_size = 1392, l2_chunk_size = 0, l2_ack_interval = 0;
 uint32_t mmu_pool_size = 4096;    // 交换机 MMU 总池大小 (flit 数)
 uint32_t mmu_min_guarantee = 64;  // 每端口保底额度 (flit 数)
 uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
-uint32_t rto_us = 20;             // RTO 超时值 (微秒)
+uint32_t rto_us = 500;            // RTO 超时值 (微秒) — 从20us增大以减少RTO风暴事件数
 double pause_time = 5;  // PFC pause, microseconds
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
 // queue length monitoring time is not used in this simulator
@@ -151,7 +151,7 @@ uint32_t buffer_size = 0;  // 0 to set buffer size automatically
 // Added from Here
 double load = 10.0;
 int enable_irn = 0;
-int random_seed = 1;  // change this randomly if you want random expt
+int random_seed = 42;  // change this randomly if you want random expt
 
 uint64_t maxRtt, maxBdp;
 
@@ -277,8 +277,13 @@ void ExecuteStep(uint32_t stepId) {
             has_win ? (global_t == 1 ? maxBdp : pairBdp[n.Get(task.src)][n.Get(task.dst)]) : 0,
             global_t == 1 ? maxRtt : pairRtt[n.Get(task.src)][n.Get(task.dst)]);
         
-        // 【关键】必须把 stepId 存进 StatFlowID，否则接收端不知道这是哪一步结束了
-        clientHelper.SetAttribute("StatFlowID", IntegerValue(stepId));
+        // flow_id 策略：
+        // - 多步流量(max_step_id>0, 如 allreduce)：使用 stepId 确保 barrier 机制正常
+        //   Ring 模式每个目标设备只有一个 sender，不存在多流交错 QP 问题
+        // - 单步流量(max_step_id==0, 如 alltoall)：使用唯一 ID 避免多流交错时 RDMA QP 记账出错
+        uint32_t fid = (max_step_id > 0) ? stepId : flow_id;
+        clientHelper.SetAttribute("StatFlowID", IntegerValue(fid));
+        flow_id++;
 
         ApplicationContainer appCon = clientHelper.Install(n.Get(task.src));
         appCon.Start(Seconds(0)); 
@@ -1521,6 +1526,9 @@ std::cout<<"333333333"<<std::endl;
         // because we want our IP to be the primary IP (first in the IP address list),
         // so that the global routing is based on our IP
         NetDeviceContainer d = qbb.Install(snode, dnode);
+        // 注意：错误模型只在 d.Get(0) 上（即 snode 方向）。
+        // d.Get(1) (dnode 方向) 不设错误模型，保证 ACK/信用返回路径可靠。
+        // 这样模拟的是单向信道故障（数据丢包），协议可以正常收敛。
         // 在属性系统设置完成后，初始化 credit 相关状态
         //DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
         //DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
@@ -2111,7 +2119,7 @@ std::cout<<"333333333"<<std::endl;
     NS_LOG_INFO("Run Simulation.");
     Simulator::Schedule(Seconds(flowgen_start_time),
                         &stop_simulation_middle);  // check every 100us
-    Simulator::Stop(Seconds(flowgen_stop_time + 10.0));
+    Simulator::Stop(Seconds(flowgen_stop_time + 5.0));
     Simulator::Run();
 
     /*-----------------------------------------------------------------------------*/
