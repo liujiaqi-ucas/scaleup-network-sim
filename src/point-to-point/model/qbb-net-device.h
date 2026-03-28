@@ -184,7 +184,7 @@ public:
      void UpdateRtoTimer();
      void HandleRtoTimeout ();
      void HandleCumulativeACK(uint64_t ackSeq);  // 处理累计确认 (交换机侧: 清理 slidingWindow + 释放 MMU)
-     void HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_t bitmapHigh);  // 处理位图 NAK
+     void HandleGbnNAK(uint64_t baseSeq);  // GBN: 从 baseSeq 开始回退，重传窗口中所有未确认包
      Ptr<Packet> GetFlitFromWindow(uint16_t seqNum);  // 辅助：从 slidingWindow 取 flit (自动分发到 MMU 或 localCopy)
      void FreeFlitInWindow(FlitMeta& meta);           // 辅助：释放一个 FlitMeta 的存储 (自动分发)
    //*********************************************************************************** */
