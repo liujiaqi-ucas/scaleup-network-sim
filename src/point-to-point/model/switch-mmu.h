@@ -12,7 +12,7 @@
 #include "ns3/letflow-routing.h"
 #include "ns3/settings.h"
 
-#define SWITCH_MMU_ALPHA 0.5   // α 初始值 / 上限
+#define SWITCH_MMU_ALPHA 0.5   // 全局固定 α（基线方案：所有端口共用，不随时间变化）
 
 namespace ns3 {
 
@@ -41,10 +41,10 @@ class SwitchMmu : public Object {
     void FreeSpace(int index, uint32_t portId);    // 释放槽位（ACK 时调用）
 
     // =========================================================
-    // 动态 Alpha：重传缓冲区感知
+    // 基线方案：全局固定 Alpha（MarkAsSent/EvaluatePortAlpha 保留接口但为空操作）
     // =========================================================
-    void MarkAsSent(int slotIndex, uint32_t portId);  // flit 发送上线路时调用
-    void EvaluatePortAlpha();                          // 周期性 AIMD 评估
+    void MarkAsSent(int slotIndex, uint32_t portId);  // 空操作（基线不需要追踪重传状态）
+    void EvaluatePortAlpha();                          // 空操作（基线 α 固定不变）
 
     uint32_t GetPoolFree() const;
 
@@ -63,23 +63,14 @@ class SwitchMmu : public Object {
 
     std::vector<Ptr<Packet>> m_physicalSRAM;   // 物理池
     std::queue<int>          m_freeList;        // 空闲下标
-    std::vector<uint32_t>    m_portUsed;        // 每出端口总占用（转发队列+重传缓冲区）
+    std::vector<uint32_t>    m_portUsed;        // 每出端口总占用
 
-    // --- 动态 Alpha 相关 ---
-    double   m_portAlpha[pCnt];          // 每出端口独立的 α
-    uint32_t m_portRetransBuf[pCnt];     // 每出端口 已发未确认 的 flit 数
-    bool*    m_slotIsSent;               // 每个槽位是否已发出 (大小=poolSize)
+    // --- 基线方案：全局固定 Alpha ---
+    // 所有端口共用同一个 α，且运行期间不改变
+    // 对应论文 DT（Dynamic Threshold）基线：threshold = minG + α × poolFree
+    double   m_globalAlpha;     // 全局唯一 α（固定不变，= SWITCH_MMU_ALPHA = 0.5）
 
-    bool     m_evalScheduled;    // 是否已调度 EvaluatePortAlpha
-
-    // AIMD 参数
-    double   m_alphaMax;        // α 上限 (= SWITCH_MMU_ALPHA, 0.5)
-    double   m_alphaMin;        // α 下限 (0.1)
-    double   m_mdBeta;          // 乘法减因子 (0.5)
-    double   m_aiDelta;         // 加法增步长 (0.05)
-    double   m_retransThresh;   // 重传缓冲区比例阈值 (0.7)
-    uint32_t m_evalMinUsed;     // 冷启动保护：portUsed < 此值时不评估 (8)
-    Time     m_evalInterval;    // 评估周期 (10μs)
+    bool     m_evalScheduled;   // 保留字段（接口兼容，基线中为空操作）
 };
 
 } /* namespace ns3 */
