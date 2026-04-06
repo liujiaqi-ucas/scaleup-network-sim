@@ -127,6 +127,11 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
         txDevice->EnqueueTxIndex(index);
         txDevice->DequeueAndTransmit();
     }
+    // 通知 RX 设备发送待发的 credit（RX 端口在转发成功后需要告知上游可继续发送）
+    Ptr<QbbNetDevice> rxDevice = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
+    if (rxDevice) {
+        rxDevice->TriggerCreditSendIfNeeded();
+    }
     if (type == 0 || type == 3) {
         m_txPortLocks[txPortId] = rxPortId; // 火车头上锁
     }

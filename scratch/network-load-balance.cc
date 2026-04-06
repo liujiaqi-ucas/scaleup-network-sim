@@ -1526,12 +1526,13 @@ std::cout<<"333333333"<<std::endl;
         // because we want our IP to be the primary IP (first in the IP address list),
         // so that the global routing is based on our IP
         NetDeviceContainer d = qbb.Install(snode, dnode);
-        // 注意：错误模型只在 d.Get(0) 上（即 snode 方向）。
-        // d.Get(1) (dnode 方向) 不设错误模型，保证 ACK/信用返回路径可靠。
-        // 这样模拟的是单向信道故障（数据丢包），协议可以正常收敛。
-        // 在属性系统设置完成后，初始化 credit 相关状态
-        //DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
-        //DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
+        // 错误模型只留在 d.Get(1)（dnode 方向，即接收来自 snode 的数据）。
+        // d.Get(0)（snode 方向，接收来自 dnode 的 ACK/Credit）清除错误模型，
+        // 保证控制包返回路径可靠，避免 ACK/Credit 被误丢导致不必要的重传风暴。
+        DynamicCast<QbbNetDevice>(d.Get(0))->SetReceiveErrorModel(nullptr);
+        // 在属性系统设置完成后，初始化 credit 相关状态（用 m_creditInit 覆盖构造函数硬编码的 256）
+        DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
+        DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
         if (snode->GetNodeType() == 0) {
             Ptr<Ipv4> ipv4 = snode->GetObject<Ipv4>();
             ipv4->AddInterface(d.Get(0));
@@ -1665,8 +1666,10 @@ std::cout<<"333333333"<<std::endl;
     topo2bdpMap[std::string("leaf_spine_128_100G_OS2")] = 104000;  // RTT=8320
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
     topo2bdpMap[std::string("H100_8_300G_OS2")] = 312000;   // RTT=8320
+    topo2bdpMap[std::string("H100_8_0.")] = 312000;         // H100 error-rate variants
     topo2bdpMap[std::string("twoserver_oneswitch")] = 312000;
     topo2bdpMap[std::string("NVL72_72_800G_OS2")] = 200000;
+    topo2bdpMap[std::string("NVL72_0.")] = 200000;          // NVL72 error-rate variants
     // topology_file
     bool found_topo2bdpMap = false;
     uint32_t irn_bdp_lookup = 0;

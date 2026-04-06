@@ -47,6 +47,7 @@ class SwitchMmu : public Object {
     void EvaluatePortAlpha();                          // 周期性 AIMD 评估
 
     uint32_t GetPoolFree() const;
+    uint32_t GetPortUsed(uint32_t portId) const { return portId < m_portUsed.size() ? m_portUsed[portId] : 0; }
 
     /*------------ Routing Objects (public) -------------*/
     CongaRouting m_congaRouting;

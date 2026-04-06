@@ -272,6 +272,15 @@ QbbNetDevice::QbbNetDevice() {
 }
 
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
+
+void QbbNetDevice::InitCredit() {
+    // 在属性系统完成设置后调用（即 qbb.Install() 之后），
+    // 用 m_creditInit 覆盖构造函数中硬编码的 256。
+    m_bufferSize = m_creditInit;
+    m_txLimit = (uint16_t)m_creditInit;
+    m_rxBuffer = Create<RxBuffer>((uint16_t)m_creditInit);
+}
+
 void QbbNetDevice::UpdateRtoTimer() {
       // -------------------------------------------------------
       // 职责：确保 RTO 定时器对准窗口中"最老的、还需要关注的"未确认 flit
@@ -912,7 +921,6 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                         return;
                 } else{
                     // >>>>>> 钱不够！不能发 >>>>>>>
-                    //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查不通过，信用不够发这个包，我不能发了"<<std::endl;
                 }
                 
             }else{
@@ -1161,17 +1169,26 @@ void QbbNetDevice::TryForwardingRxBuffer() {
             creditflag = true; // 转发成功了，说明对端已经有机会收到包了，可能会有 ACK/NAK 和 Credit 要发了
             m_rxCumulativeFreed++; // 这个是我接收端释放的计数，捎带更新一下
 
-        } 
+        }
         else if (status == BLOCKED_BY_LOCK || status == BLOCKED_BY_MMU) {
             // 转发失败！被锁或者被 MMU 卡住了
             m_rxStalled = true;
-            
+
             // 【绝对的原子性保护】：立刻 return！
             // 这个 Flit 依然稳稳地停在队头。
             // 当 SwitchNode 轮询仲裁点名到我时，我会用同一个 Flit 再次发起请求！
-            return; 
+            return;
         }
     }
+    // 转发循环结束后，触发 credit 发送（如有）
+    TriggerCreditSendIfNeeded();
+}
+
+void QbbNetDevice::TriggerCreditSendIfNeeded() {
+    if (creditflag && m_txMachineState == READY) {
+        DequeueAndTransmit();
+    }
+    // 若 TX 忙碌中，credit 会在 TransmitComplete→DequeueAndTransmit 时通过 piggycredit 发出
 }
 void QbbNetDevice::Receive(Ptr<Packet> packet) {
     NS_LOG_FUNCTION(this << packet);
@@ -1250,9 +1267,6 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         fh.setcreditflag(0);
         uint16_t currentCredit = fh.GetCreditLimit();
         m_txLimit = currentCredit;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了下游的流控回复   "<<"现在的信用限制是"<<m_txLimit<<std::endl;
-        
-        //std::cout<<"Node "<<m_node->GetId()<<" device  "<<m_ifIndex<<"因为收到流控要触发dequeue了"<<std::endl;
         if (m_txMachineState == READY) {
             DequeueAndTransmit();  // 收到新信用后立刻重试，防止信用到达时设备空转
         }

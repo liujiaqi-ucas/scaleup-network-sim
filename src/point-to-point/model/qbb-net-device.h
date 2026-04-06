@@ -169,7 +169,9 @@ public:
    //std::deque<uint16_t> m_retransQueue; // 端侧待重传序号队列
 
  //函数区*************************************************************************************************************************
+  void InitCredit(); // 在属性系统设置完成后调用，用 m_creditInit 初始化 m_bufferSize/m_txLimit/m_rxBuffer
   void TryForwardingRxBuffer(); // 尝试转发 RX Buffer 里的包（每次收到新包或被唤醒时调用）
+  void TriggerCreditSendIfNeeded(); // 若有待发 credit 且 TX 空闲，立即触发发送（供 RequestForward 调用）
   void EnqueueTxIndex(int physicalIndex);// TX 端口调用的接口：把一个物理下标放进发送队列
   void PrintBitmap(uint64_t high, uint64_t low);
   // 职责：打上序号 + 存入重传缓冲区
