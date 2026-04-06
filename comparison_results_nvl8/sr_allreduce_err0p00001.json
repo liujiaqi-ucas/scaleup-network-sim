@@ -1,0 +1,8 @@
+{
+  "protocol": "sr",
+  "traffic": "allreduce",
+  "error_rate": 1e-05,
+  "fct_file": "mix/output/406446516/406446516_out_fct.txt",
+  "n_flows": 112,
+  "elapsed": 28.592559576034546
+}

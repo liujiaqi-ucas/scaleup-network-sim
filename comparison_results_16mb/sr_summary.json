@@ -1,0 +1,50 @@
+[
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 1e-05,
+    "fct_file": "mix/output/610196823/610196823_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 26.53667163848877
+  },
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 0.0001,
+    "fct_file": "mix/output/553074696/553074696_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 24.40144968032837
+  },
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 0.001,
+    "fct_file": "mix/output/456029473/456029473_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 15.322316884994507
+  },
+  {
+    "protocol": "sr",
+    "traffic": "allreduce",
+    "error_rate": 1e-05,
+    "fct_file": "mix/output/303563658/303563658_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 42.42277550697327
+  },
+  {
+    "protocol": "sr",
+    "traffic": "allreduce",
+    "error_rate": 0.0001,
+    "fct_file": "mix/output/581225766/581225766_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 40.37944030761719
+  },
+  {
+    "protocol": "sr",
+    "traffic": "allreduce",
+    "error_rate": 0.001,
+    "fct_file": "mix/output/32959622/32959622_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 30.08533263206482
+  }
+]

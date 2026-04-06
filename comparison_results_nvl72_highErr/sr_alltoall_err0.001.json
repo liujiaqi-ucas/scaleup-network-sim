@@ -1,0 +1,10 @@
+{
+  "protocol": "sr",
+  "traffic": "alltoall",
+  "error_rate": 0.001,
+  "n_gpus": 72,
+  "data_mb": 3,
+  "fct_file": "mix/output/494168692/494168692_out_fct.txt",
+  "n_flows": 5112,
+  "elapsed_min": 1.015402865409851
+}

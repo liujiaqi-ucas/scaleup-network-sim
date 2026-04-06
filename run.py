@@ -117,10 +117,10 @@ lb_modes = {
 
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,  # 2-tier -> all 100Gbps
-    "fat_k8_100G_OS2": 156000,  # 3-tier -> all 100Gbps
-    "H100_8_300G_OS2": 312000,
-    "twoserver_oneswitch_OS2": 312000,
-    "NVL72_72_800G_OS2": 200000,  # NVL72: 800Gbps * 200ns RTT / 8 = 20KB, with margin
+    "fat_k8_100G_OS2": 156000,          # 3-tier -> all 100Gbps
+    "H100_8_300G_OS2": 10000,           # 800Gbps * 2 * 50ns / 8 = 10KB
+    "twoserver_oneswitch_OS2": 10000,
+    "NVL72_72_800G_OS2": 10000,         # 400Gbps * 2 * 100ns / 8 = 10KB
 }
 
 # 链路层 SR+CBFC 参数 (按拓扑自动选择)
@@ -129,11 +129,15 @@ topo2bdp = {
 # credit_init: 初始信用 = RxBuffer 容量 (flit 数)
 # rto_us: RTO 超时值 (微秒)
 topo2linklayer = {
-    "H100_8_300G_OS2":        {"mmu_pool_size": 65536, "mmu_min_guarantee": 64,  "credit_init": 4096, "rto_us": 500},
-    "twoserver_oneswitch_OS2":{"mmu_pool_size": 4096,  "mmu_min_guarantee": 64,  "credit_init": 64, "rto_us": 500},
-    "NVL72_72_800G_OS2":      {"mmu_pool_size": 16384, "mmu_min_guarantee": 32,  "credit_init": 192, "rto_us": 5},
-    "leaf_spine_128_100G_OS2":{"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
-    "fat_k8_100G_OS2":        {"mmu_pool_size": 8192,  "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
+    # H100: 800/1000Gbps, 50ns delay, BDP~40flits
+    # RX=128flits, TX protected=128flits/port, shared pool=2048flits, RTO=1us
+    "H100_8_300G_OS2":        {"mmu_pool_size": 2048, "mmu_min_guarantee": 128, "credit_init": 128, "rto_us": 1},
+    "twoserver_oneswitch_OS2":{"mmu_pool_size": 2048, "mmu_min_guarantee": 128, "credit_init": 128, "rto_us": 1},
+    # NVL72: 400Gbps, 100ns delay, BDP~40flits, 72 GPUs x 18 switches
+    # RX=128flits, TX protected=128flits/port, shared pool=2048flits, RTO=1us
+    "NVL72_72_800G_OS2":      {"mmu_pool_size": 2048, "mmu_min_guarantee": 128, "credit_init": 128, "rto_us": 1},
+    "leaf_spine_128_100G_OS2":{"mmu_pool_size": 8192, "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
+    "fat_k8_100G_OS2":        {"mmu_pool_size": 8192, "mmu_min_guarantee": 64,  "credit_init": 256, "rto_us": 50},
 }
 
 FLOWGEN_DEFAULT_TIME = 2.0  # see /traffic_gen/traffic_gen.py::base_t
@@ -165,6 +169,8 @@ def main():
                         default='200', help="the NIC bandwidth (Gbps) (default: 100)")
     parser.add_argument('--topo', dest='topo', action='store',
                         default='H100_8_300G_OS2', help="the name of the topology file (default: H100_8_300G_OS2)")
+    parser.add_argument('--flow', dest='flow', action='store',
+                        default='flow_alltoall_8gpu_16mb', help="the name of the flow file without .txt (default: flow_alltoall_8gpu_16mb)")
     parser.add_argument('--cdf', dest='cdf', action='store',
                         default='AliStorage2019', help="the name of the cdf file (default: AliStorage2019)")
     parser.add_argument('--enforce_win', dest='enforce_win', action='store',
@@ -262,34 +268,36 @@ def main():
     #         output=os.getcwd() + "/config/" + flow + ".txt"))
 
 
-    # --- [修改 ] 强制使用手动生成的 Scale-up 流量文件 ---
-    # 这里填写你在 gen_scaleup_traffic.py 里生成的文件名（不带 .txt）
-    # 如果你想跑 All-to-All，就改成 flow_alltoall
-    target_flow_name = "flow_allreduce"
-    
-    flow = target_flow_name
+    # --- Scale-up 流量文件（通过 --flow 命令行参数指定）---
+    flow = args.flow
     flow_file_path = os.getcwd() + "/config/" + flow + ".txt"
 
     if not exists(flow_file_path):
         raise Exception(f"Error: 流量文件 {flow_file_path} 不存在！\n"
-                        f"请先运行 'python3 gen_scaleup_traffic.py' 生成它。")
-    
+                        f"请先运行 'python3 gen_scaleup_traffic.py --all' 生成流量文件。")
+
     print(f"--> [Scale-up Mode] 使用流量文件: {flow}.txt")
     # ----------------------------------------------------
     # sanity check - bandwidth
-    with open("config/{topo}.txt".format(topo=args.topo), 'r') as f_topo:
-        first_line = f_topo.readline().split(" ")
-        n_host = int(first_line[0]) - int(first_line[1])
-        n_link = int(first_line[2])
-        i = 0
-        for line in f_topo.readlines()[1:]:
-            i += 1
-            if (i > n_link):
-                break
-            parsed = line.split(" ")
-            if len(parsed) > 2 and (int(parsed[0]) < n_host or int(parsed[1]) < n_host):
-                assert (int(parsed[2].replace("Gbps", "")) == int(bw))
-    print("All NIC bandwidth is {bw}Gbps".format(bw=bw))
+    # Scale-up 拓扑（H100/NVL72）链路带宽非均匀，跳过统一带宽检查
+    scaleup_topos = ["H100", "NVL72"]
+    is_scaleup = any(t in topo for t in scaleup_topos)
+    if not is_scaleup:
+        with open("config/{topo}.txt".format(topo=args.topo), 'r') as f_topo:
+            first_line = f_topo.readline().split(" ")
+            n_host = int(first_line[0]) - int(first_line[1])
+            n_link = int(first_line[2])
+            i = 0
+            for line in f_topo.readlines()[1:]:
+                i += 1
+                if (i > n_link):
+                    break
+                parsed = line.split(" ")
+                if len(parsed) > 2 and (int(parsed[0]) < n_host or int(parsed[1]) < n_host):
+                    assert (int(parsed[2].replace("Gbps", "")) == int(bw))
+        print("All NIC bandwidth is {bw}Gbps".format(bw=bw))
+    else:
+        print("Scale-up topology detected, skipping uniform bandwidth check.")
 
     ##################################################################
     ##########              ConWeave parameters             ##########

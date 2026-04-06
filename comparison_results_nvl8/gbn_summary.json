@@ -1,0 +1,50 @@
+[
+  {
+    "protocol": "gbn",
+    "traffic": "alltoall",
+    "error_rate": 1e-05,
+    "fct_file": "mix/output/616404054/616404054_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 28.359723567962646
+  },
+  {
+    "protocol": "gbn",
+    "traffic": "alltoall",
+    "error_rate": 0.0001,
+    "fct_file": "mix/output/547992419/547992419_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 17.87697672843933
+  },
+  {
+    "protocol": "gbn",
+    "traffic": "alltoall",
+    "error_rate": 0.001,
+    "fct_file": "mix/output/865331451/865331451_out_fct.txt",
+    "n_flows": 56,
+    "elapsed": 4.586605787277222
+  },
+  {
+    "protocol": "gbn",
+    "traffic": "allreduce",
+    "error_rate": 1e-05,
+    "fct_file": "mix/output/712175358/712175358_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 28.989977598190308
+  },
+  {
+    "protocol": "gbn",
+    "traffic": "allreduce",
+    "error_rate": 0.0001,
+    "fct_file": "mix/output/418893599/418893599_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 20.415270566940308
+  },
+  {
+    "protocol": "gbn",
+    "traffic": "allreduce",
+    "error_rate": 0.001,
+    "fct_file": "mix/output/544926037/544926037_out_fct.txt",
+    "n_flows": 112,
+    "elapsed": 6.2998857498168945
+  }
+]

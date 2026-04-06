@@ -1,0 +1,10 @@
+{
+  "protocol": "dynamic_alpha",
+  "traffic": "alltoall",
+  "error_rate": 0.001,
+  "n_gpus": 8,
+  "data_mb": 1,
+  "fct_file": "mix/output/98802142/98802142_out_fct.txt",
+  "n_flows": 56,
+  "elapsed_s": 6.159731864929199
+}

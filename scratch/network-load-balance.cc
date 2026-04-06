@@ -2119,7 +2119,7 @@ std::cout<<"333333333"<<std::endl;
     NS_LOG_INFO("Run Simulation.");
     Simulator::Schedule(Seconds(flowgen_start_time),
                         &stop_simulation_middle);  // check every 100us
-    Simulator::Stop(Seconds(flowgen_stop_time + 5.0));
+    Simulator::Stop(Seconds(flowgen_stop_time + 0.5));
     Simulator::Run();
 
     /*-----------------------------------------------------------------------------*/

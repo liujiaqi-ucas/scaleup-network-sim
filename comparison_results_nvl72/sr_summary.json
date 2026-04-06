@@ -1,0 +1,26 @@
+[
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 1e-05,
+    "fct_file": "mix/output/614712124/614712124_out_fct.txt",
+    "n_flows": 5112,
+    "elapsed": 4021.4187338352203
+  },
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 0.0001,
+    "fct_file": "mix/output/300225326/300225326_out_fct.txt",
+    "n_flows": 5112,
+    "elapsed": 3598.5597865581512
+  },
+  {
+    "protocol": "sr",
+    "traffic": "alltoall",
+    "error_rate": 0.001,
+    "fct_file": "mix/output/56657713/56657713_out_fct.txt",
+    "n_flows": 5112,
+    "elapsed": 417.5722744464874
+  }
+]

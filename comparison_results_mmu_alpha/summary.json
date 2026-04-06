@@ -1,0 +1,62 @@
+[
+  {
+    "protocol": "global_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.0001,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/615572281/615572281_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 14.137732744216919
+  },
+  {
+    "protocol": "dynamic_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.0001,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/63575189/63575189_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 11.960649251937866
+  },
+  {
+    "protocol": "global_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.001,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/411555929/411555929_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 6.059600830078125
+  },
+  {
+    "protocol": "dynamic_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.001,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/98802142/98802142_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 6.159731864929199
+  },
+  {
+    "protocol": "global_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.01,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/541218363/541218363_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 2.079035520553589
+  },
+  {
+    "protocol": "dynamic_alpha",
+    "traffic": "alltoall",
+    "error_rate": 0.01,
+    "n_gpus": 8,
+    "data_mb": 1,
+    "fct_file": "mix/output/950134976/950134976_out_fct.txt",
+    "n_flows": 56,
+    "elapsed_s": 2.195594549179077
+  }
+]

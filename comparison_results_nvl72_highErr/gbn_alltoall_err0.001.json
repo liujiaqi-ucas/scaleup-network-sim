@@ -1,0 +1,10 @@
+{
+  "protocol": "gbn",
+  "traffic": "alltoall",
+  "error_rate": 0.001,
+  "n_gpus": 72,
+  "data_mb": 3,
+  "fct_file": "mix/output/918396853/918396853_out_fct.txt",
+  "n_flows": 5112,
+  "elapsed_min": 1.0150439898173014
+}

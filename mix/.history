@@ -961,3 +961,171 @@ date,id,ccmode,lbmode,cwh_tx_expiry_time,cwh_extra_reply_deadline,cwh_path_pause
 ./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/958372363/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/958372363/config.log 2>&1
 ./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/958372363/config.txt'
 
+03/29/26,431966648,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/431966648/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/431966648/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/431966648/config.txt'
+
+03/29/26,807434305,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/807434305/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/807434305/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/807434305/config.txt'
+
+03/29/26,979827738,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/979827738/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/979827738/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/979827738/config.txt'
+
+03/29/26,918396853,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/918396853/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/918396853/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/918396853/config.txt'
+
+03/29/26,494168692,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/494168692/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/494168692/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/494168692/config.txt'
+
+03/30/26,475036949,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/475036949/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/475036949/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/475036949/config.txt'
+
+03/30/26,420377160,0,0,1000,4,16,64,400,0,0,0,0,NVL72_72_800G_OS2,800,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/420377160/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/420377160/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/420377160/config.txt'
+
+03/30/26,971662973,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/971662973/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/971662973/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/971662973/config.txt'
+
+03/30/26,18601842,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/18601842/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/18601842/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/18601842/config.txt'
+
+03/30/26,282376233,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/282376233/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/282376233/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/282376233/config.txt'
+
+03/30/26,48818577,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/48818577/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/48818577/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/48818577/config.txt'
+
+03/30/26,962392213,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/962392213/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/962392213/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/962392213/config.txt'
+
+03/30/26,839145718,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/839145718/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/839145718/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/839145718/config.txt'
+
+03/30/26,222393843,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/222393843/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/222393843/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/222393843/config.txt'
+
+03/30/26,269071020,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/269071020/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/269071020/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/269071020/config.txt'
+
+03/30/26,583624023,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/583624023/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/583624023/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/583624023/config.txt'
+
+03/30/26,27867688,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.005
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/27867688/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/27867688/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/27867688/config.txt'
+
+03/30/26,954414760,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.005
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/954414760/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/954414760/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/954414760/config.txt'
+
+03/30/26,458739361,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/458739361/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/458739361/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/458739361/config.txt'
+
+03/30/26,288802680,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/288802680/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/288802680/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/288802680/config.txt'
+
+03/30/26,121261731,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/121261731/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/121261731/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/121261731/config.txt'
+
+03/30/26,172384883,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/172384883/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/172384883/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/172384883/config.txt'
+
+03/30/26,502772913,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/502772913/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/502772913/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/502772913/config.txt'
+
+03/30/26,923373824,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/923373824/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/923373824/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/923373824/config.txt'
+
+03/30/26,40511027,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/40511027/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/40511027/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/40511027/config.txt'
+
+03/30/26,615572281,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/615572281/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/615572281/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/615572281/config.txt'
+
+03/30/26,63575189,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/63575189/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/63575189/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/63575189/config.txt'
+
+03/30/26,411555929,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/411555929/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/411555929/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/411555929/config.txt'
+
+03/30/26,98802142,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/98802142/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/98802142/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/98802142/config.txt'
+
+03/30/26,541218363,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/541218363/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/541218363/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/541218363/config.txt'
+
+03/30/26,950134976,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/950134976/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/950134976/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/950134976/config.txt'
+
+03/30/26,33780019,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/33780019/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/33780019/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/33780019/config.txt'
+
+03/30/26,118727768,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/118727768/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/118727768/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/118727768/config.txt'
+
+03/30/26,223516117,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.01
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/223516117/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/223516117/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/223516117/config.txt'
+
+03/30/26,538648776,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.01
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/538648776/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/538648776/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/538648776/config.txt'
+
+03/30/26,801980720,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/801980720/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/801980720/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/801980720/config.txt'
+
+03/30/26,553488717,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/553488717/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/553488717/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/553488717/config.txt'
+
+03/30/26,683900118,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/683900118/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/683900118/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/683900118/config.txt'
+
+03/30/26,648097902,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/648097902/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/648097902/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/648097902/config.txt'
+
+03/30/26,608433883,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/608433883/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/608433883/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/608433883/config.txt'
+
+03/30/26,686055053,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/686055053/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/686055053/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/686055053/config.txt'
+
+03/30/26,836746210,0,0,1000,4,16,64,400,0,0,0,0,H100_8_300G_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/836746210/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/836746210/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/836746210/config.txt'
+

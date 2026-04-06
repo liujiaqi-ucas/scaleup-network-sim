@@ -1,0 +1,10 @@
+{
+  "protocol": "global_alpha",
+  "traffic": "alltoall",
+  "error_rate": 0.01,
+  "n_gpus": 8,
+  "data_mb": 1,
+  "fct_file": "mix/output/541218363/541218363_out_fct.txt",
+  "n_flows": 56,
+  "elapsed_s": 2.079035520553589
+}
