@@ -86,7 +86,8 @@ uint32_t packet_payload_size = 1392, l2_chunk_size = 0, l2_ack_interval = 0;
 uint32_t mmu_pool_size = 4096;    // 交换机 MMU 总池大小 (flit 数)
 uint32_t mmu_min_guarantee = 64;  // 每端口保底额度 (flit 数)
 uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
-uint32_t rto_us = 500;            // RTO 超时值 (微秒) — 从20us增大以减少RTO风暴事件数
+uint32_t rto_us = 500;            // RTO 超时值 (微秒)
+double   mmu_global_alpha = 0.5;  // 全局固定 α（静态 DT 基线），可通过 MMU_GLOBAL_ALPHA 覆盖
 double pause_time = 5;  // PFC pause, microseconds
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
 // queue length monitoring time is not used in this simulator
@@ -1287,6 +1288,9 @@ int main(int argc, char *argv[]) {
                 conf >> v;
                 rto_us = v;
                 std::cerr << "RTO_US\t\t\t\t" << rto_us << "\n";
+            } else if (key.compare("MMU_GLOBAL_ALPHA") == 0) {
+                conf >> mmu_global_alpha;
+                std::cerr << "MMU_GLOBAL_ALPHA\t\t" << mmu_global_alpha << "\n";
             }
 
             fflush(stdout);
@@ -1622,6 +1626,7 @@ std::cout<<"333333333"<<std::endl;
             }
             // 配置新的共享物理池 (替换旧的 ConfigNPort/ConfigBufferSize)
             sw->m_mmu->ConfigPool(mmu_pool_size, mmu_min_guarantee);
+            sw->m_mmu->SetGlobalAlpha(mmu_global_alpha);  // 全局静态 α
             sw->m_mmu->SetNode(GetPointer(sw));
             //NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
                        // (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));

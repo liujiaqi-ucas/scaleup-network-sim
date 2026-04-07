@@ -179,32 +179,17 @@ void SwitchMmu::MarkAsSent(int slotIndex, uint32_t portId) {
 }
 
 // =========================================================
-// 周期性 AIMD 评估：根据重传缓冲区占比调整 α
+// 全局静态 α：EvaluatePortAlpha 不调整 α，仅维持定时器以兼容接口
 // =========================================================
-void SwitchMmu::EvaluatePortAlpha() {
-    uint64_t now_ns = Simulator::Now().GetNanoSeconds();
+void SwitchMmu::SetGlobalAlpha(double alpha) {
+    m_alphaMax = alpha;
     for (uint32_t p = 0; p < pCnt; p++) {
-        if (m_portUsed[p] < m_evalMinUsed) continue;
-
-        double ratio = static_cast<double>(m_portRetransBuf[p])
-                      / static_cast<double>(m_portUsed[p]);
-
-        if (ratio > m_retransThresh) {
-            m_portAlpha[p] = std::max(m_alphaMin, m_portAlpha[p] * m_mdBeta);
-        } else {
-            m_portAlpha[p] = std::min(m_alphaMax, m_portAlpha[p] + m_aiDelta);
-        }
-
-        if (m_node) {
-            std::cerr << "[ALPHA_LOG] " << now_ns
-                      << " " << m_node->GetId()
-                      << " " << p
-                      << " " << m_portAlpha[p]
-                      << " " << ratio
-                      << " " << m_portRetransBuf[p]
-                      << " " << m_portUsed[p] << "\n";
-        }
+        m_portAlpha[p] = alpha;
     }
+}
+
+void SwitchMmu::EvaluatePortAlpha() {
+    // 静态 α 分支：α 固定不变，不做 AIMD 调整
     Simulator::Schedule(m_evalInterval, &SwitchMmu::EvaluatePortAlpha, this);
 }
 

@@ -44,7 +44,8 @@ class SwitchMmu : public Object {
     // 动态 Alpha：重传缓冲区感知
     // =========================================================
     void MarkAsSent(int slotIndex, uint32_t portId);  // flit 发送上线路时调用
-    void EvaluatePortAlpha();                          // 周期性 AIMD 评估
+    void EvaluatePortAlpha();                          // 空操作（静态 α 不调整）
+    void SetGlobalAlpha(double alpha);                 // 设置全局固定 α（所有端口相同）
 
     uint32_t GetPoolFree() const;
     uint32_t GetPortUsed(uint32_t portId) const { return portId < m_portUsed.size() ? m_portUsed[portId] : 0; }
