@@ -131,6 +131,7 @@ topo2bdp = {
     "H100_8_0.0001_OS2":  _H100_BDP,
     "H100_8_0.0005_OS2":  _H100_BDP,
     "H100_8_0.001_OS2":   _H100_BDP,
+    "H100_8_0.005_OS2":   _H100_BDP,
     # NVL72 base + per-error-rate variants
     "NVL72_72_800G_OS2":  _NVL72_BDP,
     "NVL72_0.00001_OS2":  _NVL72_BDP,
@@ -156,6 +157,7 @@ topo2linklayer = {
     "H100_8_0.0001_OS2":  _H100_LL,
     "H100_8_0.0005_OS2":  _H100_LL,
     "H100_8_0.001_OS2":   _H100_LL,
+    "H100_8_0.005_OS2":   _H100_LL,
     # NVL72 base + per-error-rate variants
     "NVL72_72_800G_OS2":  _NVL72_LL,
     "NVL72_0.00001_OS2":  _NVL72_LL,

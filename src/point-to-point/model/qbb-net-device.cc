@@ -988,6 +988,9 @@ void QbbNetDevice::DequeueAndTransmit(void) {
               // 统一取包接口
               Ptr<Packet> flit = GetFlitFromWindow(sn);
               if (flit) {
+                  // 通知 MMU：该槽位正在重传（供 dynamic-α 追踪重传率）
+                  if (m_mmu && meta.physicalIndex >= 0)
+                      m_mmu->MarkAsSent(meta.physicalIndex, m_portId);
                   TransmitStart(flit->Copy());
                   UpdateRtoTimer();
                   return;

@@ -1,0 +1,30 @@
+GBN vs SR 对比实验数据
+============================================================
+拓扑: H100_8_0.001_OS2  错误率: 0.001
+指标: 平均 FCT (μs) / P50 FCT (μs) / P99 FCT (μs)
+
+[ALLREDUCE]
+  1MB: GBN mean=3.6μs p50=1.7μs p99=19.2μs  |  SR mean=3.5μs p50=1.5μs p99=19.2μs
+  4MB: GBN mean=12.8μs p50=5.9μs p99=51.5μs  |  SR mean=8.1μs p50=5.5μs p99=49.4μs
+  16MB: GBN mean=25.5μs p50=23.3μs p99=67.8μs  |  SR mean=24.5μs p50=22.1μs p99=67.3μs
+
+[ALLTOALL]
+  1MB: GBN mean=29.4μs p50=31.2μs p99=45.5μs  |  SR mean=27.4μs p50=29.1μs p99=40.8μs
+  4MB: GBN mean=116.6μs p50=126.3μs p99=177.1μs  |  SR mean=108.9μs p50=118.0μs p99=160.0μs
+  16MB: GBN mean=463.2μs p50=504.8μs p99=702.7μs  |  SR mean=434.1μs p50=470.1μs p99=638.6μs
+
+==============================
+JCT 数据 (单位: μs)
+==============================
+[ALLREDUCE]
+  1MB:  GBN JCT=169.4μs  |  SR JCT=167.3μs
+  4MB:  GBN JCT=752.1μs  |  SR JCT=297.0μs  ← SR 快 2.5x
+  16MB: GBN JCT=552.6μs  |  SR JCT=561.0μs
+
+[ALLTOALL]
+  1MB:  GBN JCT=45.5μs   |  SR JCT=40.8μs
+  4MB:  GBN JCT=177.1μs  |  SR JCT=160.0μs
+  16MB: GBN JCT=702.7μs  |  SR JCT=638.6μs
+
+注：alltoall 的 JCT = P99 FCT（单阶段，最慢的那条流决定整体完成）
+    allreduce 的 JCT 包含所有阶段的串行等待时间

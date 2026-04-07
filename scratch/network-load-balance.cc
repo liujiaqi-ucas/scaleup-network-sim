@@ -1529,7 +1529,8 @@ std::cout<<"333333333"<<std::endl;
         // 错误模型只留在 d.Get(1)（dnode 方向，即接收来自 snode 的数据）。
         // d.Get(0)（snode 方向，接收来自 dnode 的 ACK/Credit）清除错误模型，
         // 保证控制包返回路径可靠，避免 ACK/Credit 被误丢导致不必要的重传风暴。
-        DynamicCast<QbbNetDevice>(d.Get(0))->SetReceiveErrorModel(nullptr);
+        // 实验一：双向错误模型，让 switch 也产生重传，触发 dynamic-α AIMD 下降
+        // DynamicCast<QbbNetDevice>(d.Get(0))->SetReceiveErrorModel(nullptr);
         // 在属性系统设置完成后，初始化 credit 相关状态（用 m_creditInit 覆盖构造函数硬编码的 256）
         DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
         DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
@@ -1666,7 +1667,7 @@ std::cout<<"333333333"<<std::endl;
     topo2bdpMap[std::string("leaf_spine_128_100G_OS2")] = 104000;  // RTT=8320
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
     topo2bdpMap[std::string("H100_8_300G_OS2")] = 312000;   // RTT=8320
-    topo2bdpMap[std::string("H100_8_0.")] = 312000;         // H100 error-rate variants
+    topo2bdpMap[std::string("H100_8_0.")] = 312000;  // 覆盖所有 H100_8_0.xxx_OS2 变体         // H100 error-rate variants
     topo2bdpMap[std::string("twoserver_oneswitch")] = 312000;
     topo2bdpMap[std::string("NVL72_72_800G_OS2")] = 200000;
     topo2bdpMap[std::string("NVL72_0.")] = 200000;          // NVL72 error-rate variants

@@ -182,25 +182,29 @@ void SwitchMmu::MarkAsSent(int slotIndex, uint32_t portId) {
 // 周期性 AIMD 评估：根据重传缓冲区占比调整 α
 // =========================================================
 void SwitchMmu::EvaluatePortAlpha() {
+    uint64_t now_ns = Simulator::Now().GetNanoSeconds();
     for (uint32_t p = 0; p < pCnt; p++) {
-        // 冷启动保护
-        if (m_portUsed[p] < m_evalMinUsed) {
-            continue;
-        }
+        if (m_portUsed[p] < m_evalMinUsed) continue;
 
         double ratio = static_cast<double>(m_portRetransBuf[p])
                       / static_cast<double>(m_portUsed[p]);
 
         if (ratio > m_retransThresh) {
-            // 乘法减：重传缓冲区占比过高
             m_portAlpha[p] = std::max(m_alphaMin, m_portAlpha[p] * m_mdBeta);
         } else {
-            // 加法增：恢复
             m_portAlpha[p] = std::min(m_alphaMax, m_portAlpha[p] + m_aiDelta);
         }
-    }
 
-    // 调度下一次评估
+        if (m_node) {
+            std::cerr << "[ALPHA_LOG] " << now_ns
+                      << " " << m_node->GetId()
+                      << " " << p
+                      << " " << m_portAlpha[p]
+                      << " " << ratio
+                      << " " << m_portRetransBuf[p]
+                      << " " << m_portUsed[p] << "\n";
+        }
+    }
     Simulator::Schedule(m_evalInterval, &SwitchMmu::EvaluatePortAlpha, this);
 }
 
