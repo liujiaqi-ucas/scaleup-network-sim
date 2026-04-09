@@ -118,8 +118,8 @@ lb_modes = {
 
 _H100_BDP = 10000   # 800Gbps * 2 * 100ns / 8 = 10KB
 _NVL72_BDP = 10000  # 400Gbps * 2 * 100ns / 8 = 10KB
-_H100_LL  = {"mmu_pool_size": 524288, "mmu_min_guarantee": 64, "credit_init": 4096, "rto_us": 500}
-_NVL72_LL = {"mmu_pool_size": 2097152, "mmu_min_guarantee": 64, "credit_init": 4096, "rto_us": 500}
+_H100_LL  = {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 4096, "rto_us": 10}
+_NVL72_LL = {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 4096, "rto_us": 10}
 
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,
@@ -148,8 +148,8 @@ topo2bdp = {
 # credit_init: RX buffer 容量 = 初始信用 (flit 数)
 # rto_us: RTO 超时值 (微秒)
 topo2linklayer = {
-    "leaf_spine_128_100G_OS2": {"mmu_pool_size": 8192, "mmu_min_guarantee": 64, "credit_init": 256, "rto_us": 50},
-    "fat_k8_100G_OS2":         {"mmu_pool_size": 8192, "mmu_min_guarantee": 64, "credit_init": 256, "rto_us": 50},
+    "leaf_spine_128_100G_OS2": {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 256, "rto_us": 10},
+    "fat_k8_100G_OS2":         {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 256, "rto_us": 10},
     "twoserver_oneswitch_OS2": _H100_LL,
     # H100 base + per-error-rate variants
     "H100_8_300G_OS2":    _H100_LL,
@@ -415,7 +415,7 @@ def main():
     # 链路层 SR+CBFC 参数 (按拓扑自动选择)
     if topo2linklayer.get(topo) == None:
         print("WARNING - topology '{}' has no link-layer config in run.py, using defaults".format(topo), flush=True)
-        ll_params = {"mmu_pool_size": 4096, "mmu_min_guarantee": 64, "credit_init": 256, "rto_us": 20}
+        ll_params = {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 256, "rto_us": 10}
     else:
         ll_params = topo2linklayer[topo]
     mmu_pool_size = ll_params["mmu_pool_size"]
