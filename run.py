@@ -95,6 +95,7 @@ MMU_POOL_SIZE {mmu_pool_size}
 MMU_MIN_GUARANTEE {mmu_min_guarantee}
 CREDIT_INIT {credit_init}
 RTO_US {rto_us}
+MMU_GLOBAL_ALPHA {mmu_global_alpha}
 """
 
 
@@ -204,6 +205,8 @@ def main():
                         type=int, default=0, help="enforce to use window scheme (default: 0)")
     parser.add_argument('--sw_monitoring_interval', dest='sw_monitoring_interval', action='store',
                         type=int, default=10000, help="interval of sampling statistics for queue status (default: 10000ns)")
+    parser.add_argument('--alpha', dest='alpha', action='store',
+                        type=float, default=0.5, help="全局固定 MMU DT alpha 值 (default: 0.5)")
     print("77777777")
     # #### CONWEAVE PARAMETERS ####
     # parser.add_argument('--cwh_extra_reply_deadline', dest='cwh_extra_reply_deadline', action='store',
@@ -419,8 +422,9 @@ def main():
     mmu_min_guarantee = ll_params["mmu_min_guarantee"]
     credit_init = ll_params["credit_init"]
     rto_us = ll_params["rto_us"]
-    print("Link-layer params: pool={}, minG={}, credit={}, rto={}us".format(
-        mmu_pool_size, mmu_min_guarantee, credit_init, rto_us))
+    mmu_global_alpha = args.alpha
+    print("Link-layer params: pool={}, minG={}, credit={}, rto={}us, alpha={}".format(
+        mmu_pool_size, mmu_min_guarantee, credit_init, rto_us, mmu_global_alpha))
 
     # DCQCN parameters (NOTE: HPCC's 400KB/1600KB is too large, although used in Microsoft)
     # 7 entries: covers up to 1000Gbps (H100/NVL72 switch-to-switch links)
@@ -467,7 +471,8 @@ def main():
                                         fast_react=fast_react, mi=mi, int_multi=int_multi, ewma_gain=ewma_gain,enable_qcn=enable_qcn,
                                         kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map,
                                         mmu_pool_size=mmu_pool_size, mmu_min_guarantee=mmu_min_guarantee,
-                                        credit_init=credit_init, rto_us=rto_us)
+                                        credit_init=credit_init, rto_us=rto_us,
+                                        mmu_global_alpha=mmu_global_alpha)
     with open(config_name, "w") as file:
         file.write(config)
     # run program
