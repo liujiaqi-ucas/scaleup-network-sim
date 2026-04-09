@@ -17,6 +17,7 @@
 #include "ns3/uinteger.h"
 #include "flitheader.h"
 #include "switch-node.h"
+#include "qbb-net-device.h"
 
 NS_LOG_COMPONENT_DEFINE("SwitchMmu");
 
@@ -36,7 +37,7 @@ SwitchMmu::SwitchMmu(void)
       m_evalScheduled(false),
       m_alphaMax(SWITCH_MMU_ALPHA), m_alphaMin(0.1),
       m_mdBeta(0.5), m_aiDelta(0.05),
-      m_retransThresh(0.7), m_evalMinUsed(8),
+      m_retransThresh(0.2), m_evalMinUsed(8),
       m_evalInterval(MicroSeconds(10)) {
     m_portUsed.resize(pCnt, 0);
     for (uint32_t i = 0; i < pCnt; i++) {
@@ -179,21 +180,46 @@ void SwitchMmu::MarkAsSent(int slotIndex, uint32_t portId) {
 }
 
 // =========================================================
-// 周期性 AIMD 评估：根据重传缓冲区占比调整 α
+// 周期性 AIMD 评估：相对公平策略（方案一改进版）
+// 计算每个活跃端口的占用比 ratio = portUsed / (portUsed + poolFree)
+// 与所有活跃端口的平均 ratio 比较：
+//   高于平均 × (1 + m_retransThresh) → MD 降 α（惩罚重度用户）
+//   低于等于 → AI 升 α（奖励轻度用户）
 // =========================================================
 void SwitchMmu::EvaluatePortAlpha() {
+    // 第一遍：收集活跃端口的占用比
+    uint32_t activeCount = 0;
+    double totalRatio = 0.0;
+    double portRatio[pCnt] = {};
+
     for (uint32_t p = 0; p < pCnt; p++) {
         if (m_portUsed[p] < m_evalMinUsed) continue;
+        portRatio[p] = static_cast<double>(m_portUsed[p])
+                      / static_cast<double>(m_portUsed[p] + m_poolFree);
+        totalRatio += portRatio[p];
+        activeCount++;
+    }
 
-        double ratio = static_cast<double>(m_portRetransBuf[p])
-                      / static_cast<double>(m_portUsed[p]);
+    if (activeCount > 0) {
+        double avgRatio = totalRatio / activeCount;
+        // m_retransThresh 作为 "超过平均多少比例才惩罚" 的容忍度
+        // 例如 0.2 表示超过平均 20% 才触发 MD
+        double mdThreshold = avgRatio * (1.0 + m_retransThresh);
 
-        if (ratio > m_retransThresh) {
-            m_portAlpha[p] = std::max(m_alphaMin, m_portAlpha[p] * m_mdBeta);
-        } else {
-            m_portAlpha[p] = std::min(m_alphaMax, m_portAlpha[p] + m_aiDelta);
+        // 第二遍：根据相对位置调整 α
+        for (uint32_t p = 0; p < pCnt; p++) {
+            if (m_portUsed[p] < m_evalMinUsed) continue;
+
+            if (portRatio[p] > mdThreshold) {
+                m_portAlpha[p] = std::max(m_alphaMin,
+                                          m_portAlpha[p] * m_mdBeta);
+            } else {
+                m_portAlpha[p] = std::min(m_alphaMax,
+                                          m_portAlpha[p] + m_aiDelta);
+            }
         }
     }
+
     Simulator::Schedule(m_evalInterval, &SwitchMmu::EvaluatePortAlpha, this);
 }
 

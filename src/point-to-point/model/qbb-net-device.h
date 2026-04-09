@@ -144,6 +144,7 @@ public:
   uint16_t m_ctrl_seq[8];
     // 内部转发引擎状态
     bool m_rxStalled;                    // 我当前是否被大老板 (锁或 MMU) 卡住了？
+    bool m_forwarding = false;           // 防重入：TryForwardingRxBuffer 正在执行中
     // 交换机侧需要的指针 (端侧不使用)
     Ptr<SwitchMmu> m_mmu;         // 交换机 MMU (内存管理)
     SwitchNode* m_switchNode;     // 所属交换机节点

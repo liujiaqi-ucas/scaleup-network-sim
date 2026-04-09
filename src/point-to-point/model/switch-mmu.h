@@ -78,7 +78,7 @@ class SwitchMmu : public Object {
     double   m_alphaMin;        // α 下限 (0.1)
     double   m_mdBeta;          // 乘法减因子 (0.5)
     double   m_aiDelta;         // 加法增步长 (0.05)
-    double   m_retransThresh;   // 重传缓冲区比例阈值 (0.7)
+    double   m_retransThresh;   // 相对公平容忍度：超过平均占用比×(1+此值)才惩罚 (0.2)
     uint32_t m_evalMinUsed;     // 冷启动保护：portUsed < 此值时不评估 (8)
     Time     m_evalInterval;    // 评估周期 (10μs)
 };

@@ -1156,7 +1156,11 @@ void QbbNetDevice::EnqueueTxIndex(int physicalIndex) {
     // NS_LOG_DEBUG("Port " << m_portId << " received new flit index " << physicalIndex << " to transmit.");
 }
 void QbbNetDevice::TryForwardingRxBuffer() {
-    
+    // 防重入：NotifyLockReleased/NotifySpaceAvailable 级联可能递归调用此函数，
+    // 若已在运行中则跳过，等当前调用的 while 循环自然处理。
+    if (m_forwarding) return;
+    m_forwarding = true;
+
     // 只要有准备好的 Flit，就一直尝试往交叉开关里塞
     while (!m_readyQueue.empty()) {
         
@@ -1180,10 +1184,12 @@ void QbbNetDevice::TryForwardingRxBuffer() {
             // 【绝对的原子性保护】：立刻 return！
             // 这个 Flit 依然稳稳地停在队头。
             // 当 SwitchNode 轮询仲裁点名到我时，我会用同一个 Flit 再次发起请求！
+            m_forwarding = false;
             return;
         }
     }
     // 转发循环结束后，触发 credit 发送（如有）
+    m_forwarding = false;
     TriggerCreditSendIfNeeded();
 }
 

@@ -157,19 +157,19 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
 // 一旦有人成功抢到锁（txPortLocks 被占），立刻停止。
 // 如果队头因为 MMU 满而失败，继续尝试下一个（锁还是空闲的）。
 void SwitchNode::NotifyLockReleased(int txPortId) {
+    // 收集需要唤醒的端口，但不立即调用 TryForwardingRxBuffer
+    // 用 ScheduleNow 延迟到下一个事件循环迭代，避免同步级联导致指数爆炸
     while (!m_lockWaiters[txPortId].empty()) {
-        // 取队头（最先等待的端口）
         int rxPortId = m_lockWaiters[txPortId].front();
         m_lockWaiters[txPortId].pop_front();
         m_inLockQueue.erase(rxPortId);
 
         Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
         if (dev) {
-            dev->TryForwardingRxBuffer();
+            Simulator::ScheduleNow(&QbbNetDevice::TryForwardingRxBuffer, dev);
         }
-
-        // 如果锁已被占，说明刚才那个端口成功拿到了锁，后面的人不用试了
-        if (m_txPortLocks[txPortId] != -1) break;
+        // 不再同步检查锁状态——延迟执行后锁的状态会自然处理
+        break;  // 只唤醒一个，后续的等下次释放时再唤醒
     }
 }
 
@@ -179,18 +179,16 @@ void SwitchNode::NotifyLockReleased(int txPortId) {
 // 逐个唤醒，直到空闲空间耗尽。
 // 这样每次释放 1 个 flit 只唤醒 1 个等待者，消除雪崩效应。
 void SwitchNode::NotifySpaceAvailable() {
-    while (!m_mmuWaiters.empty()) {
+    // 与 NotifyLockReleased 同理：延迟唤醒，避免同步级联
+    if (!m_mmuWaiters.empty()) {
         int rxPortId = m_mmuWaiters.front();
         m_mmuWaiters.pop_front();
         m_inMmuQueue.erase(rxPortId);
 
         Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
         if (dev) {
-            dev->TryForwardingRxBuffer();
+            Simulator::ScheduleNow(&QbbNetDevice::TryForwardingRxBuffer, dev);
         }
-
-        // 空间耗尽则停止（避免后续端口白跑一趟）
-        if (m_mmu->GetPoolFree() == 0) break;
     }
 }
 
