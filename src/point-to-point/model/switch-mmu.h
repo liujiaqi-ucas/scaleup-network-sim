@@ -12,7 +12,7 @@
 #include "ns3/letflow-routing.h"
 #include "ns3/settings.h"
 
-#define SWITCH_MMU_ALPHA 0.5   // α 初始值 / 上限
+#define SWITCH_MMU_ALPHA 0.5
 
 namespace ns3 {
 
@@ -29,27 +29,19 @@ class SwitchMmu : public Object {
     SwitchMmu(void);
     virtual ~SwitchMmu(void);
 
-    // 运行时配置：创建交换机后调用
     void ConfigPool(uint32_t poolSize, uint32_t minGuarantee);
 
-    // =========================================================
-    // 核心功能
-    // =========================================================
-    int  AllocateSpace(uint32_t portId);          // 申请槽位（动态阈值准入）
-    void StorePacket(int index, Ptr<Packet> p);   // 存入 Payload
-    Ptr<Packet> ReadFlit(int index) const;         // 零拷贝读取
-    void FreeSpace(int index, uint32_t portId);    // 释放槽位（ACK 时调用）
+    int  AllocateSpace(uint32_t portId);
+    void StorePacket(int index, Ptr<Packet> p);
+    Ptr<Packet> ReadFlit(int index) const;
+    void FreeSpace(int index, uint32_t portId);
 
-    // =========================================================
-    // 动态 Alpha：重传缓冲区感知
-    // =========================================================
-    void MarkAsSent(int slotIndex, uint32_t portId);  // flit 发送上线路时调用
-    void EvaluatePortAlpha();                          // 周期性 AIMD 评估
+    void MarkAsSent(int slotIndex, uint32_t portId);
+    void EvaluatePortAlpha();
 
     uint32_t GetPoolFree() const;
     uint32_t GetPortUsed(uint32_t portId) const { return portId < m_portUsed.size() ? m_portUsed[portId] : 0; }
 
-    /*------------ Routing Objects (public) -------------*/
     CongaRouting m_congaRouting;
     LetflowRouting m_letflowRouting;
     ConWeaveRouting m_conweaveRouting;
@@ -57,30 +49,30 @@ class SwitchMmu : public Object {
    private:
     SwitchNode* m_node;
 
-    // --- 物理共享池 ---
     uint32_t m_totalPoolSize;
     uint32_t m_poolFree;
     uint32_t m_minGuarantee;
 
-    std::vector<Ptr<Packet>> m_physicalSRAM;   // 物理池
-    std::queue<int>          m_freeList;        // 空闲下标
-    std::vector<uint32_t>    m_portUsed;        // 每出端口总占用（转发队列+重传缓冲区）
+    std::vector<Ptr<Packet>> m_physicalSRAM;
+    std::queue<int>          m_freeList;
+    std::vector<uint32_t>    m_portUsed;
 
-    // --- 动态 Alpha 相关 ---
-    double   m_portAlpha[pCnt];          // 每出端口独立的 α
-    uint32_t m_portRetransBuf[pCnt];     // 每出端口 已发未确认 的 flit 数
-    bool*    m_slotIsSent;               // 每个槽位是否已发出 (大小=poolSize)
+    // --- 动态 Alpha：重传缓冲区占比感知 ---
+    double   m_portAlpha[pCnt];
+    uint32_t m_portRetransBuf[pCnt];
+    bool*    m_slotIsSent;
+    uint32_t m_portWarmup[pCnt];
+    bool     m_portWasActive[pCnt];
 
-    bool     m_evalScheduled;    // 是否已调度 EvaluatePortAlpha
+    bool     m_evalScheduled;
 
-    // AIMD 参数
-    double   m_alphaMax;        // α 上限 (= SWITCH_MMU_ALPHA, 0.5)
-    double   m_alphaMin;        // α 下限 (0.1)
-    double   m_mdBeta;          // 乘法减因子 (0.5)
-    double   m_aiDelta;         // 加法增步长 (0.05)
-    double   m_retransThresh;   // 相对公平容忍度：超过平均占用比×(1+此值)才惩罚 (0.2)
-    uint32_t m_evalMinUsed;     // 冷启动保护：portUsed < 此值时不评估 (8)
-    Time     m_evalInterval;    // 评估周期 (10μs)
+    double   m_alphaMax;
+    double   m_mdBeta;
+    double   m_aiDelta;
+    double   m_retransThresh;
+    uint32_t m_evalMinUsed;
+    uint32_t m_warmupPeriods;
+    Time     m_evalInterval;
 };
 
 } /* namespace ns3 */

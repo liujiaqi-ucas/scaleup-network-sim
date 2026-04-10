@@ -408,4 +408,81 @@ ReceiveListErrorModel::DoReset (void)
 }
 
 
+// =========================================================
+// GilbertElliottErrorModel 实现
+// =========================================================
+
+NS_OBJECT_ENSURE_REGISTERED (GilbertElliottErrorModel);
+
+TypeId
+GilbertElliottErrorModel::GetTypeId (void)
+{
+  static TypeId tid = TypeId ("ns3::GilbertElliottErrorModel")
+    .SetParent<ErrorModel> ()
+    .AddConstructor<GilbertElliottErrorModel> ()
+    ;
+  return tid;
+}
+
+GilbertElliottErrorModel::GilbertElliottErrorModel ()
+  : m_inBadState (false),
+    m_pGoodToBad (0.0),
+    m_qBadToGood (1.0)
+{
+  m_rng = CreateObject<UniformRandomVariable> ();
+}
+
+GilbertElliottErrorModel::~GilbertElliottErrorModel ()
+{
+}
+
+void
+GilbertElliottErrorModel::SetParameters (double avgErrorRate, double avgBurstLength)
+{
+  // 平均突发长度 = 1/q  →  q = 1/avgBurstLength
+  // 平均错误率 = p/(p+q)  →  p = avgErrorRate * q / (1 - avgErrorRate)
+  m_qBadToGood = 1.0 / avgBurstLength;
+  if (avgErrorRate <= 0.0 || avgErrorRate >= 1.0) {
+    m_pGoodToBad = 0.0;
+    m_qBadToGood = 1.0;
+    return;
+  }
+  m_pGoodToBad = avgErrorRate * m_qBadToGood / (1.0 - avgErrorRate);
+}
+
+void
+GilbertElliottErrorModel::SetStream (int64_t stream)
+{
+  m_rng->SetStream(stream);
+}
+
+bool
+GilbertElliottErrorModel::DoCorrupt (Ptr<Packet> p)
+{
+  if (!IsEnabled ()) return false;
+
+  double r = m_rng->GetValue (0.0, 1.0);
+
+  if (m_inBadState) {
+    // Bad 状态：丢包，然后按 q 概率转回 Good
+    if (r < m_qBadToGood) {
+      m_inBadState = false;
+    }
+    return true;  // Bad 状态下一定丢包
+  } else {
+    // Good 状态：不丢包，然后按 p 概率转入 Bad
+    if (r < m_pGoodToBad) {
+      m_inBadState = true;
+      return true;  // 转入 Bad 的第一个包也丢
+    }
+    return false;  // Good 状态不丢包
+  }
+}
+
+void
+GilbertElliottErrorModel::DoReset (void)
+{
+  m_inBadState = false;
+}
+
 } // namespace ns3

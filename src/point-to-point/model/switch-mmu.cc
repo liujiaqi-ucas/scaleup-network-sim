@@ -35,14 +35,17 @@ SwitchMmu::SwitchMmu(void)
     : m_node(nullptr), m_totalPoolSize(0), m_poolFree(0),
       m_minGuarantee(0), m_slotIsSent(nullptr),
       m_evalScheduled(false),
-      m_alphaMax(SWITCH_MMU_ALPHA), m_alphaMin(0.1),
+      m_alphaMax(SWITCH_MMU_ALPHA),
       m_mdBeta(0.5), m_aiDelta(0.05),
-      m_retransThresh(0.2), m_evalMinUsed(8),
+      m_retransThresh(0.5), m_evalMinUsed(8),
+      m_warmupPeriods(5),
       m_evalInterval(MicroSeconds(10)) {
     m_portUsed.resize(pCnt, 0);
     for (uint32_t i = 0; i < pCnt; i++) {
         m_portAlpha[i] = m_alphaMax;
         m_portRetransBuf[i] = 0;
+        m_portWarmup[i] = 0;
+        m_portWasActive[i] = false;
     }
 }
 
@@ -65,17 +68,16 @@ void SwitchMmu::ConfigPool(uint32_t poolSize, uint32_t minGuarantee) {
         m_freeList.push(i);
     }
 
-    // 初始化槽位元数据
     if (m_slotIsSent) delete[] m_slotIsSent;
-    m_slotIsSent = new bool[poolSize]();  // 零初始化
+    m_slotIsSent = new bool[poolSize]();
 
-    // 重置每端口状态
     for (uint32_t i = 0; i < pCnt; i++) {
         m_portAlpha[i] = m_alphaMax;
         m_portRetransBuf[i] = 0;
+        m_portWarmup[i] = 0;
+        m_portWasActive[i] = false;
     }
 
-    // 启动周期性评估定时器（防止重复调用 ConfigPool 导致多个定时器）
     if (!m_evalScheduled) {
         Simulator::Schedule(m_evalInterval, &SwitchMmu::EvaluatePortAlpha, this);
         m_evalScheduled = true;
@@ -90,9 +92,6 @@ void SwitchMmu::SetNode(SwitchNode* node) {
     m_node = node;
 }
 
-// =========================================================
-// 核心：动态阈值准入（使用 per-port α）
-// =========================================================
 int SwitchMmu::AllocateSpace(uint32_t portId) {
     if (m_poolFree == 0 || m_freeList.empty()) {
         return -1;
@@ -100,7 +99,6 @@ int SwitchMmu::AllocateSpace(uint32_t portId) {
 
     uint32_t currentUsed = m_portUsed[portId];
 
-    // 步骤 1：保底额度内直接放行
     if (currentUsed < m_minGuarantee) {
         int index = m_freeList.front();
         m_freeList.pop();
@@ -110,13 +108,10 @@ int SwitchMmu::AllocateSpace(uint32_t portId) {
         return index;
     }
 
-    // 步骤 2：超出保底，用该端口自己的 α 计算动态阈值
-    // 保底 +1：防止 α × poolFree 截断为 0 导致阈值退化
     uint32_t dynamicPart = std::max(1u,
         static_cast<uint32_t>(m_portAlpha[portId] * m_poolFree));
     uint32_t dynamicThreshold = m_minGuarantee + dynamicPart;
 
-    // 步骤 3：准入判定
     if (currentUsed < dynamicThreshold) {
         int index = m_freeList.front();
         m_freeList.pop();
@@ -126,9 +121,6 @@ int SwitchMmu::AllocateSpace(uint32_t portId) {
         return index;
     }
 
-    NS_LOG_DEBUG("Port " << portId << " rejected. Used=" << currentUsed
-                 << ", Thresh=" << dynamicThreshold
-                 << ", Alpha=" << m_portAlpha[portId]);
     return -1;
 }
 
@@ -140,9 +132,6 @@ Ptr<Packet> SwitchMmu::ReadFlit(int index) const {
     return m_physicalSRAM[index];
 }
 
-// =========================================================
-// 释放槽位（ACK 时调用）
-// =========================================================
 void SwitchMmu::FreeSpace(int index, uint32_t portId) {
     if (index < 0 || index >= (int)m_totalPoolSize) return;
     if (m_poolFree >= m_totalPoolSize) {
@@ -159,7 +148,6 @@ void SwitchMmu::FreeSpace(int index, uint32_t portId) {
     }
     m_poolFree++;
 
-    // 同步重传缓冲区计数
     if (m_slotIsSent[index]) {
         if (m_portRetransBuf[portId] > 0) {
             m_portRetransBuf[portId]--;
@@ -168,9 +156,6 @@ void SwitchMmu::FreeSpace(int index, uint32_t portId) {
     }
 }
 
-// =========================================================
-// flit 发送上线路时调用：标记槽位为 "已发未确认"
-// =========================================================
 void SwitchMmu::MarkAsSent(int slotIndex, uint32_t portId) {
     if (slotIndex < 0 || slotIndex >= (int)m_totalPoolSize) return;
     if (!m_slotIsSent[slotIndex]) {
@@ -180,43 +165,44 @@ void SwitchMmu::MarkAsSent(int slotIndex, uint32_t portId) {
 }
 
 // =========================================================
-// 周期性 AIMD 评估：相对公平策略（方案一改进版）
-// 计算每个活跃端口的占用比 ratio = portUsed / (portUsed + poolFree)
-// 与所有活跃端口的平均 ratio 比较：
-//   高于平均 × (1 + m_retransThresh) → MD 降 α（惩罚重度用户）
-//   低于等于 → AI 升 α（奖励轻度用户）
+// 重传缓冲区占比感知的 AIMD α 调整
+// retransThresh = 0.5：超过 50% 缓冲被"卡住"就降 α
 // =========================================================
 void SwitchMmu::EvaluatePortAlpha() {
-    // 第一遍：收集活跃端口的占用比
-    uint32_t activeCount = 0;
-    double totalRatio = 0.0;
-    double portRatio[pCnt] = {};
 
-    for (uint32_t p = 0; p < pCnt; p++) {
-        if (m_portUsed[p] < m_evalMinUsed) continue;
-        portRatio[p] = static_cast<double>(m_portUsed[p])
-                      / static_cast<double>(m_portUsed[p] + m_poolFree);
-        totalRatio += portRatio[p];
-        activeCount++;
+    double poolUsageRatio = 1.0 - static_cast<double>(m_poolFree) / m_totalPoolSize;
+    double alphaMin;
+    if (poolUsageRatio < 0.5) {
+        alphaMin = 0.3;
+    } else if (poolUsageRatio < 0.8) {
+        alphaMin = 0.2;
+    } else {
+        alphaMin = 0.1;
     }
 
-    if (activeCount > 0) {
-        double avgRatio = totalRatio / activeCount;
-        // m_retransThresh 作为 "超过平均多少比例才惩罚" 的容忍度
-        // 例如 0.2 表示超过平均 20% 才触发 MD
-        double mdThreshold = avgRatio * (1.0 + m_retransThresh);
+    for (uint32_t p = 0; p < pCnt; p++) {
+        bool isActive = (m_portUsed[p] >= m_evalMinUsed);
 
-        // 第二遍：根据相对位置调整 α
-        for (uint32_t p = 0; p < pCnt; p++) {
-            if (m_portUsed[p] < m_evalMinUsed) continue;
+        if (isActive && !m_portWasActive[p]) {
+            m_portWarmup[p] = m_warmupPeriods;
+        }
+        m_portWasActive[p] = isActive;
 
-            if (portRatio[p] > mdThreshold) {
-                m_portAlpha[p] = std::max(m_alphaMin,
-                                          m_portAlpha[p] * m_mdBeta);
-            } else {
-                m_portAlpha[p] = std::min(m_alphaMax,
-                                          m_portAlpha[p] + m_aiDelta);
-            }
+        if (!isActive) continue;
+
+        if (m_portWarmup[p] > 0) {
+            m_portWarmup[p]--;
+            m_portAlpha[p] = std::min(m_alphaMax, m_portAlpha[p] + m_aiDelta);
+            continue;
+        }
+
+        double retransRatio = static_cast<double>(m_portRetransBuf[p])
+                             / static_cast<double>(m_portUsed[p]);
+
+        if (retransRatio > m_retransThresh) {
+            m_portAlpha[p] = std::max(alphaMin, m_portAlpha[p] * m_mdBeta);
+        } else {
+            m_portAlpha[p] = std::min(m_alphaMax, m_portAlpha[p] + m_aiDelta);
         }
     }
 

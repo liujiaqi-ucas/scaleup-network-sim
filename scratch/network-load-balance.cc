@@ -87,6 +87,7 @@ uint32_t mmu_pool_size = 4096;    // 交换机 MMU 总池大小 (flit 数)
 uint32_t mmu_min_guarantee = 64;  // 每端口保底额度 (flit 数)
 uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
 uint32_t rto_us = 500;            // RTO 超时值 (微秒) — 从20us增大以减少RTO风暴事件数
+double mmu_global_alpha = 0.5;    // 全局固定 α 值
 double pause_time = 5;  // PFC pause, microseconds
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
 // queue length monitoring time is not used in this simulator
@@ -1287,6 +1288,11 @@ int main(int argc, char *argv[]) {
                 conf >> v;
                 rto_us = v;
                 std::cerr << "RTO_US\t\t\t\t" << rto_us << "\n";
+            } else if (key.compare("MMU_GLOBAL_ALPHA") == 0) {
+                double v;
+                conf >> v;
+                mmu_global_alpha = v;
+                std::cerr << "MMU_GLOBAL_ALPHA\t\t\t" << mmu_global_alpha << "\n";
             }
 
             fflush(stdout);
@@ -1486,7 +1492,7 @@ std::cout<<"333333333"<<std::endl;
     Ipv4AddressHelper ipv4;
     std::vector<std::pair<uint32_t, uint32_t>> link_pairs;  // src, dst link pairs
     //std::cout<<"4444444444444"<<std::endl;
-    int64_t current_stream_idx = 0;
+    int64_t current_stream_idx = static_cast<int64_t>(time(nullptr)) * 100;  // 真随机种子
     for (uint32_t i = 0; i < link_num; i++) {
         uint32_t src, dst;
         std::string data_rate, link_delay;
@@ -1508,13 +1514,10 @@ std::cout<<"333333333"<<std::endl;
         qbb.SetChannelAttribute("Delay", StringValue(link_delay));
 
         if (error_rate > 0) {
-            Ptr<RateErrorModel> rem = CreateObject<RateErrorModel>();
-            Ptr<UniformRandomVariable> uv = CreateObject<UniformRandomVariable>();
-            rem->SetRandomVariable(uv);
-            uv->SetStream(current_stream_idx++);
-            rem->SetAttribute("ErrorRate", DoubleValue(error_rate));
-            rem->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_PACKET"));
-            qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(rem));
+            Ptr<GilbertElliottErrorModel> gem = CreateObject<GilbertElliottErrorModel>();
+            gem->SetParameters(error_rate, 10.0);
+            gem->SetStream(current_stream_idx++);
+            qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(gem));
         } else {
             qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(rem));
         }
@@ -1665,6 +1668,7 @@ std::cout<<"333333333"<<std::endl;
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
     topo2bdpMap[std::string("H100_8_300G_OS2")] = 312000;   // RTT=8320
     topo2bdpMap[std::string("H100_8_0err")] = 312000;  // H100 zero-error variant
+    topo2bdpMap[std::string("H100_8_hetero")] = 312000;  // H100 异质错误率
     topo2bdpMap[std::string("H100_8_0.")] = 312000;  // 覆盖所有 H100_8_0.xxx_OS2 变体         // H100 error-rate variants
     topo2bdpMap[std::string("twoserver_oneswitch")] = 312000;
     topo2bdpMap[std::string("NVL72_72_800G_OS2")] = 200000;
