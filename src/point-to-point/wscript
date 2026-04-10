@@ -32,6 +32,7 @@ def build(bld):
         'model/sr-header.cc',
         'model/sr-replaybuffer.cc',
         'model/rx-buffer.cc',
+        'model/replay-buffer.cc',
 		'helper/selective-packet-queue.cc',
         ]
 
@@ -73,6 +74,7 @@ def build(bld):
         'model/sr-header.h',
         'model/sr-replaybuffer.h',
         'model/rx-buffer.h',
+        'model/replay-buffer.h',
 		'helper/selective-packet-queue.h',
         ]
 

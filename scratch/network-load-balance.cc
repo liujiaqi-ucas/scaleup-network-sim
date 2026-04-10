@@ -1602,6 +1602,9 @@ std::cout<<"333333333"<<std::endl;
                 dev->m_switchNode = GetPointer(sw);
                 dev->m_portId = j;
                 dev->m_mmu = sw->m_mmu;
+                // 分离方案：为每个交换机出端口创建独立的 replay buffer
+                // 大小 = credit_init（最大在途 flit 数）
+                dev->m_replayBuffer = new ReplayBuffer(credit_init);
                 // set ecn
                 uint64_t rate = dev->GetDataRate().GetBitRate();
                 NS_ASSERT_MSG(rate2kmin.find(rate) != rate2kmin.end(),

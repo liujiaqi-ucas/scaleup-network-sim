@@ -264,6 +264,7 @@ QbbNetDevice::QbbNetDevice() {
     m_rxBuffer = Create<RxBuffer>(256);//初始化构造rxbuffer，容量等于初始信用（单位是flit）
     m_mmu = nullptr;//这里得看一下switchnode怎么赋值的
     m_switchNode = nullptr;//这里得看一下switchnode怎么赋值的
+    m_replayBuffer = nullptr;
     m_portId = 0;
     m_rxStalled = false;//我当前是否被大老板 (锁或 MMU) 卡住了？初始没有，所以是 false
     //m_last_acked_seq = 0;
@@ -393,11 +394,13 @@ void QbbNetDevice::DoDispose() {
 
 
       auto& meta = m_slidingWindow[dist];
-      if (m_mmu) {
-          // 交换机侧：去 MMU 取
+      if (meta.replayIndex >= 0 && m_replayBuffer) {
+          // 分离方案：从 replay buffer 读取
+          return m_replayBuffer->Read(meta.replayIndex);
+      } else if (meta.physicalIndex >= 0 && m_mmu) {
+          // 统一方案 fallback
           return m_mmu->ReadFlit(meta.physicalIndex);
       } else {
-          // 端侧：直接拿本地副本
           return meta.localCopy;
       }
   }
@@ -409,11 +412,16 @@ void QbbNetDevice::DoDispose() {
       if (meta.isAcked) return; // 已经释放过了
 
       meta.isAcked = true;
-      if (m_mmu) {
-          // 交换机侧：归还 MMU 物理空间
+      if (meta.replayIndex >= 0 && m_replayBuffer) {
+          // 分离方案：从 replay buffer 释放
+          m_replayBuffer->Free(meta.replayIndex);
+          meta.replayIndex = -1;
+      } else if (meta.physicalIndex >= 0 && m_mmu) {
+          // 统一方案 fallback 或 replay buffer 满时的退化
           m_mmu->FreeSpace(meta.physicalIndex, m_portId);
+          meta.physicalIndex = -1;
       } else {
-          // 端侧：释放本地智能指针 (引用计数降为 0 时自动回收)
+          // 端侧
           meta.localCopy = nullptr;
       }
   }
@@ -989,7 +997,8 @@ void QbbNetDevice::DequeueAndTransmit(void) {
               Ptr<Packet> flit = GetFlitFromWindow(sn);
               if (flit) {
                   // 通知 MMU：该槽位正在重传（供 dynamic-α 追踪重传率）
-                  if (m_mmu && meta.physicalIndex >= 0)
+                  // 分离方案下 replayIndex >= 0 说明 MMU 已释放，不需要 MarkAsSent
+                  if (meta.replayIndex < 0 && m_mmu && meta.physicalIndex >= 0)
                       m_mmu->MarkAsSent(meta.physicalIndex, m_portId);
                   TransmitStart(flit->Copy());
                   UpdateRtoTimer();
@@ -1035,16 +1044,34 @@ void QbbNetDevice::DequeueAndTransmit(void) {
       // 接收端RemoveHeader会破坏MMU里存的原始flit，导致重传时包头丢失）
         TransmitStart(flit->Copy());
 
-        // 【状态转移】：发送完毕，绝不释放 MMU，而是将它转入重传账本！
+        // 分离方案：发送后拷贝到 replay buffer，立刻释放 MMU
         FlitMeta meta;
           meta.seqNum = m_next_seq_num;
-          meta.physicalIndex = physicalIndex;                                                                                                                                 
-          meta.localCopy = nullptr;  // 交换机侧不用本地副本
-          meta.isAcked = false;                                                                                                                                               
-          meta.isRetransmitting = false;                                                                                                                                      
-          meta.retryCount = 0;          
-          meta.sendTime = Simulator::Now();                                                                                                                                   
-                                           
+          meta.localCopy = nullptr;
+          meta.isAcked = false;
+          meta.isRetransmitting = false;
+          meta.retryCount = 0;
+          meta.sendTime = Simulator::Now();
+          if (m_replayBuffer) {
+              // 分离方案：拷贝到 replay buffer，释放 MMU
+              int replayIdx = m_replayBuffer->Allocate();
+              if (replayIdx >= 0) {
+                  m_replayBuffer->Store(replayIdx, flit->Copy());
+                  m_mmu->FreeSpace(physicalIndex, m_portId);  // 立刻释放 MMU！
+                  meta.physicalIndex = -1;
+                  meta.replayIndex = replayIdx;
+              } else {
+                  // replay buffer 满了，退化为统一方案（保留在 MMU）
+                  meta.physicalIndex = physicalIndex;
+                  meta.replayIndex = -1;
+                  if (m_mmu) m_mmu->MarkAsSent(physicalIndex, m_portId);
+              }
+          } else {
+              // 统一方案：保留在 MMU（原有逻辑）
+              meta.physicalIndex = physicalIndex;
+              meta.replayIndex = -1;
+              if (m_mmu) m_mmu->MarkAsSent(physicalIndex, m_portId);
+          }
           m_slidingWindow.push_back(meta);
         m_next_seq_num++;
         UpdateRtoTimer();  // ← 新增

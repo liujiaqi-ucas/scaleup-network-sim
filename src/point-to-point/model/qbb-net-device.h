@@ -26,6 +26,7 @@
 //#include "ns3/fivetuple.h"
 #include "ns3/event-id.h"
 #include "ns3/broadcom-egress-queue.h"
+#include "replay-buffer.h"
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-header.h"
 #include "ns3/udp-header.h"
@@ -87,16 +88,17 @@ public:
 
 // 极其轻量级的“户口本”，完美解耦物理数据
 struct FlitMeta {
-    uint16_t seqNum;       // 序列号 (统一用 uint16_t，和 m_next_seq_num 类型一致)
-      int physicalIndex;     // 交换机侧：在 MMU 物理大池子里的下标 (端侧无意义，填 -1)
-      Ptr<Packet> localCopy; // 端侧：本地存储的 flit 副本 (交换机侧为 null，用 physicalIndex 去 MMU 取)
-      bool isAcked;          // 是否已经被位图 (Bitmap) 提前确认了？
-      bool isRetransmitting; // 是否已经在重传队列里了？(防止重复入队)
-      int retryCount;        // 重传次数
-      Time sendTime;         // 发送时间戳 (用于超时检测)
+    uint16_t seqNum;
+      int physicalIndex;     // 统一方案用：MMU 物理下标（分离方案中不使用）
+      int replayIndex;       // 分离方案用：replay buffer 下标（统一方案中不使用）
+      Ptr<Packet> localCopy; // 端侧：本地存储的 flit 副本
+      bool isAcked;
+      bool isRetransmitting;
+      int retryCount;
+      Time sendTime;
 
       FlitMeta()
-          : seqNum(0), physicalIndex(-1), localCopy(nullptr),
+          : seqNum(0), physicalIndex(-1), replayIndex(-1), localCopy(nullptr),
             isAcked(false), isRetransmitting(false),
             retryCount(0), sendTime(Seconds(0)) {}
 };
@@ -149,6 +151,7 @@ public:
     Ptr<SwitchMmu> m_mmu;         // 交换机 MMU (内存管理)
     SwitchNode* m_switchNode;     // 所属交换机节点
     uint32_t m_portId;            // 本端口在交换机中的端口号
+    ReplayBuffer* m_replayBuffer; // 分离方案：per-port 独立重传缓冲区（统一方案中为 null）
 
     // 核心重传账本：带状态的滑动窗口
     std::deque<FlitMeta> m_slidingWindow;//这个账本的作用是把已发送未确认的包都放进来
