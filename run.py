@@ -118,7 +118,7 @@ lb_modes = {
 
 _H100_BDP = 10000   # 800Gbps * 2 * 100ns / 8 = 10KB
 _NVL72_BDP = 10000  # 400Gbps * 2 * 100ns / 8 = 10KB
-_H100_LL  = {"mmu_pool_size": 8192, "mmu_min_guarantee": 16, "credit_init": 256, "rto_us": 50}  # 推荐值: 2.6MB/sw, 3×BDP, FCT+12%
+_H100_LL  = {"mmu_pool_size": 2048, "mmu_min_guarantee": 4, "credit_init": 128, "rto_us": 50}  # 统一方案: 总预算2048
 _NVL72_LL = {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 4096, "rto_us": 10}
 
 topo2bdp = {
