@@ -331,40 +331,51 @@ void QbbNetDevice::UpdateRtoTimer() {
   }
   void QbbNetDevice::HandleRtoTimeout() {
       // -------------------------------------------------------
-      // 职责：只重传窗口 HEAD（最老的未确认 flit），配合指数退避
-      // 原理：HEAD 是阻塞窗口推进的关键；其余 seq 靠 NAK 驱动按需重传
-      // 好处：相比"全部重传"，事件数从 O(窗口大小) 降为 O(1)，彻底消除 RTO 风暴
+      // GBN 模式：RTO 超时时重传窗口中所有未确认的 flit（Go-Back-N）
+      // 使用窗口 HEAD 的 retryCount 做指数退避
       // -------------------------------------------------------
       Time now = Simulator::Now();
       bool anyRetrans = false;
 
-      // 只对窗口头部（最老未确认 seq）触发重传
+      // 用 HEAD 的 retryCount 计算退避 RTO
+      uint32_t headRetryCount = 0;
+      Time headSendTime;
+      for (const auto& meta : m_slidingWindow) {
+          if (!meta.isAcked) {
+              headRetryCount = meta.retryCount;
+              headSendTime = meta.sendTime;
+              break;
+          }
+      }
+      uint32_t backoffShift = (headRetryCount < 7) ? headRetryCount : 7;
+      Time effectiveRto = Time(m_rtoValue.GetNanoSeconds() * (1u << backoffShift));
+
+      if ((now - headSendTime) < effectiveRto) {
+          // 还没到期，重新调度
+          UpdateRtoTimer();
+          return;
+      }
+
+      // GBN: 重传窗口中所有未确认、未在重传队列中的 flit
       for (auto& meta : m_slidingWindow) {
           if (meta.isAcked) continue;
           if (meta.isRetransmitting) continue;
-
-          // 计算本次应有的 RTO（指数退避，上限 2^7 = 128 倍基础 RTO）
-          uint32_t backoffShift = (meta.retryCount < 7) ? meta.retryCount : 7;
-          Time effectiveRto = Time(m_rtoValue.GetNanoSeconds() * (1u << backoffShift));
-
-          if ((now - meta.sendTime) >= effectiveRto) {
-              meta.isRetransmitting = true;
-              meta.retryCount++;
-              m_retransQueue.push_back(meta.seqNum);
-              anyRetrans = true;
-
-              if (meta.retryCount <= 20 || meta.retryCount % 100 == 0) {
-                  std::cout << "[RTO] Node=" << m_node->GetId()
-                            << " Dev=" << m_ifIndex
-                            << " Seq=" << meta.seqNum
-                            << " Retry=" << meta.retryCount
-                            << " RTO=" << effectiveRto.GetMicroSeconds() << "us" << std::endl;
-              }
-          }
-          break; // 只处理 HEAD，不扫描后续 seq
+          meta.isRetransmitting = true;
+          meta.retryCount++;
+          m_retransQueue.push_back(meta.seqNum);
+          anyRetrans = true;
       }
 
-      // 重新设置定时器
+      if (anyRetrans) {
+          if (headRetryCount + 1 <= 20 || (headRetryCount + 1) % 100 == 0) {
+              std::cout << "[RTO-GBN] Node=" << m_node->GetId()
+                        << " Dev=" << m_ifIndex
+                        << " WindowSize=" << m_slidingWindow.size()
+                        << " Retry=" << headRetryCount + 1
+                        << " RTO=" << effectiveRto.GetMicroSeconds() << "us" << std::endl;
+          }
+      }
+
       UpdateRtoTimer();
 
       if (anyRetrans && m_txMachineState == READY) {
@@ -1085,61 +1096,26 @@ void QbbNetDevice::HandleCumulativeACK(uint64_t ackSeq) {
 // 核心二：处理 128 位位图 NAK (Bitmap NAK)
 // =========================================================
 void QbbNetDevice::HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_t bitmapHigh) {
-    // 先做累计确认：baseSeq 之前的包全部确认
-      HandleCumulativeACK(baseSeq);
-      if (m_slidingWindow.empty()) return;
+    // =========================================================
+    // GBN 模式：收到 NAK(baseSeq) 意味着接收端期望 baseSeq，
+    // 之后的包全部被丢弃了。重传窗口中从 baseSeq 开始的所有未确认 flit。
+    // 位图在 GBN 下不使用（接收端不缓存乱序包）。
+    // =========================================================
 
-      bool spaceFreed = false;
-      uint16_t windowBaseSeq = m_slidingWindow.front().seqNum;
+    // 1. 累计确认 baseSeq 之前的
+    HandleCumulativeACK(baseSeq);
+    if (m_slidingWindow.empty()) return;
 
-      // ----- 步骤 1：处理首个丢失的包 (baseSeq 本身) -----
-      int16_t baseOffset = (int16_t)(baseSeq - windowBaseSeq);
-      if (baseOffset >= 0 && baseOffset < (int)m_slidingWindow.size()) {
-          auto& lostPacket = m_slidingWindow[baseOffset];
-          if (!lostPacket.isAcked && !lostPacket.isRetransmitting) {
-              lostPacket.retryCount++;
-              lostPacket.isRetransmitting = true;  // 防止重复入队
-              m_retransQueue.push_back(lostPacket.seqNum);  // 统一用 seqNum，不再用 physicalIndex
-          }
-      }
+    // 2. GBN: 重传窗口中所有未确认的 flit（从 baseSeq 开始）
+    for (auto& meta : m_slidingWindow) {
+        if (meta.isAcked) continue;
+        if (meta.isRetransmitting) continue;
+        meta.retryCount++;
+        meta.isRetransmitting = true;
+        m_retransQueue.push_back(meta.seqNum);
+    }
 
-      // ----- 步骤 2：解析 128 位位图 -----
-      for (int i = 0; i < 128; ++i) {
-          uint16_t currentSeq = baseSeq + 1 + i;
-          int16_t offset = (int16_t)(currentSeq - windowBaseSeq);
-
-          if (offset >= (int)m_slidingWindow.size()) break;
-          if (offset < 0) continue;
-
-          auto& targetPacket = m_slidingWindow[offset];
-          if (targetPacket.isAcked) continue;
-
-          // 判断位图中第 i 位
-          bool isReceived = false;
-          if (i < 64) {
-              isReceived = (bitmapLow & (1ULL << i)) != 0;
-          } else {
-              isReceived = (bitmapHigh & (1ULL << (i - 64))) != 0;
-          }
-
-          if (isReceived) {
-              // 对端已乱序收到 → 释放存储
-              FreeFlitInWindow(targetPacket);
-              spaceFreed = true;
-          } else {
-              // 对端确认丢失 → 加入重传队列
-              if (!targetPacket.isRetransmitting) {
-                  targetPacket.retryCount++;
-                  targetPacket.isRetransmitting = true;
-                  m_retransQueue.push_back(targetPacket.seqNum);  // 统一用 seqNum
-              }
-          }
-      }
-
-      // 交换机侧特有
-      if (spaceFreed && m_switchNode) {
-          m_switchNode->NotifySpaceAvailable();
-      }
+    UpdateRtoTimer();
 }
 
 void QbbNetDevice::PrintBitmap(uint64_t high, uint64_t low) {
@@ -1298,136 +1274,86 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     // -------------------------------------------------------------
     
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    // 分支 A: 交换机逻辑 (Switch)
+    // 分支 A: 交换机逻辑 (Switch) — GBN 模式
+    // GBN: 只接受 m_rxNext（期望的下一个 seq），乱序包直接丢弃
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    if (m_node->GetNodeType() > 0) { 
-        
+    if (m_node->GetNodeType() > 0) {
+
         // 1. 安检 (Validity Check)
-        uint16_t dist = seq - m_rxNext ;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包的seq是"<<seq<<"，目前期待的seq是"<<m_rxNext<<"，距离是"<<dist<<std::endl;
+        uint16_t dist = seq - m_rxNext;
         if (dist >= MAX_SN / 2) {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
             TriggerAck(0, m_rxNext);
-            return;} // 过期
-        if (dist >= m_bufferSize)
-        {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
-            return; // 溢出
-            }
-        if (m_rxBuffer->IsReceived(seq))
-        {   //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
+            return; // 过期包
+        }
+        if (m_rxBuffer->IsReceived(seq)) {
             TriggerAck(0, m_rxNext);
-            return; // 重复
-            }
+            return; // 重复包
+        }
 
+        // 2. GBN 核心：只接受期望的 seq
+        if (seq != m_rxNext) {
+            // 乱序包 → 丢弃，发 NAK 告知发送端从 m_rxNext 重传
+            TriggerNak(0, m_rxNext);
+            DequeueAndTransmit();
+            return;
+        }
 
-        // 2. 入库 (Store)
-        // 交换机后续转发需要完整的包，所以先把头加回去
+        // 3. 按序到达 → 入库并提交
         packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
-        // 无脑尝试提取连续包 (解耦的神来之笔)
         std::vector<Ptr<Packet>> readyPackets;
-        uint32_t extractedCount = m_rxBuffer->CommitContiguous(readyPackets);
-
-        for (uint32_t i = 0; i < extractedCount; i++) {
-        m_readyQueue.push(readyPackets[i]);
+        m_rxBuffer->CommitContiguous(readyPackets);
+        for (uint32_t i = 0; i < readyPackets.size(); i++) {
+            m_readyQueue.push(readyPackets[i]);
         }
-        if (extractedCount > 0) {
-        // 【情况 A：按序到达 或 重传填坑成功】
-        // 只要拔出来了哪怕 1 个包，说明 m_head 绝对往前走了！
-        // 直接根据最新的 m_head 发送累计确认。
-        //SendCumulativeAck(m_rxBuffer->GetHead() - 1);
-        TriggerAck(0, m_rxBuffer->GetHead());
-        
-        // 既然有新包进入了 m_readyQueue，尝试向交换机内部转发
-        TryForwardingRxBuffer(); 
-    } 
-    else {
-        // 【情况 B：乱序到达】
-        // 存入成功了，但是拔出来的包是 0 个！
-        // 这说明什么？说明刚才存的包在 m_head 后面，是个乱序包！
-        // m_head 根本没动，前面肯定有个大坑！直接触发位图 NAK！
-        //uint64_t bitmapHigh, bitmapLow;
-        //m_rxBuffer->GenerateNackBitmap(m_rxBuffer->GetHead(), bitmapHigh, bitmapLow);
-        
-        TriggerNak(0, m_rxBuffer->GetHead());
-    }
-    m_rxNext=m_rxBuffer->GetHead(); // 更新 m_rxNext 到当前连续包的下一个位置
-        
-        DequeueAndTransmit(); // 处理完 ACK/NACK 后，尝试发送重传包或新包
-        return; // 交换机逻辑结束
+        m_rxNext = m_rxBuffer->GetHead();
+        TriggerAck(0, m_rxNext);
+        TryForwardingRxBuffer();
+
+        DequeueAndTransmit();
+        return;
     }
 
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    // 分支 B: 网卡逻辑 (NIC / End-Host)
+    // 分支 B: 网卡逻辑 (NIC / End-Host) — GBN 模式
+    // GBN: 只接受 m_rxNext，乱序包直接丢弃
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     else {
-        
-        // 1. 安检 (Validity Check)
+
         // 1. 安检 (Validity Check)
         uint16_t dist = (seq - m_rxNext + MAX_SN) % MAX_SN;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包的seq是"<<seq<<"，目前期待的seq是"<<m_rxNext<<"，距离是"<<dist<<std::endl;
         if (dist >= MAX_SN / 2) {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
             TriggerAck(0, m_rxNext);
-            return;} // 过期
-        if (dist >= m_bufferSize)
-        {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
-            return; // 溢出
-            }
-        if (m_rxBuffer->IsReceived(seq))
-        {   //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
+            return; // 过期包
+        }
+        if (m_rxBuffer->IsReceived(seq)) {
             TriggerAck(0, m_rxNext);
-            return; // 重复
-            }
+            return; // 重复包
+        }
 
-        // 2. 入库 (Store)
-        packet->AddHeader(fh); // 先加头
+        // 2. GBN 核心：只接受期望的 seq
+        if (seq != m_rxNext) {
+            // 乱序包 → 丢弃，发 NAK 告知发送端从 m_rxNext 重传
+            TriggerNak(0, m_rxNext);
+            return;
+        }
+
+        // 3. 按序到达 → 入库、提交、交付上层
+        packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
-        //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
-        // 3. 提交循环 (Commit Loop)
-        // 只有填坑成功才执行
-        if (seq == m_rxNext) {
-            //std::cout << "[COMMIT] Node=" << m_node->GetId() << " Dev=" << m_ifIndex
-            //          << " seq=" << seq << " T=" << Simulator::Now().GetNanoSeconds() << "ns" << std::endl;
-            int commitCount = 0;
 
-            // 循环处理 buffer 中所有连续的包
-            while (m_rxBuffer->IsReceived(m_rxNext)) {
-                Ptr<Packet> p = m_rxBuffer->GetPacket(m_rxNext);
-                m_rdmaReceiveCb(p, ch,m_ifIndex);//把包交给上层，注意这里的回调函数是用户自己注册的，所以我不知道它会不会卡死回不来，如果卡死了那就说明上层处理不过来了，可能需要改成异步的回调机制了
+        int commitCount = 0;
+        while (m_rxBuffer->IsReceived(m_rxNext)) {
+            Ptr<Packet> p = m_rxBuffer->GetPacket(m_rxNext);
+            m_rdmaReceiveCb(p, ch, m_ifIndex);
+            m_rxBuffer->CommitHead();
+            m_rxNext = (m_rxNext + 1) % MAX_SN;
+            commitCount++;
+        }
 
-                // d. 【关键】清理 Buffer & 推进指针
-                // 网卡侧已经交付给上层了，必须立刻清理内存并释放空间
-                //m_rxBuffer->ClearEntry(m_rxNext);
-                m_rxBuffer->CommitHead();
-                m_rxNext = (m_rxNext + 1) % MAX_SN;
-                
-                commitCount++;
-            }
-            //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"向上层传递完数据之后，现在要打印rxbuffer状态了"<<std::endl;
-            //m_rxBuffer->PrintDebugState(); // 再次打印 Buffer 状态，看看提交后的变化
-            // 4. 批量反馈 (Feedback)
-            if (commitCount > 0) {
-                // 发送 ACK
-                TriggerAck(0, m_rxNext);
-                
-                // 批量释放 Credit (因为我们刚刚 ClearEntry 了 commitCount 个包)
-                // 
-                
-                    ReleaseRxCredit(commitCount); // 替换为你实际的发送 Credit 函数
-                
-            }
-
-        } else {
-            //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了一个乱序的flit，seq是"<<seq<<"，期望的seq是"<<m_rxNext<<"，我先把它存起来，等它变成期望的seq的时候再提交"<<std::endl;
-            // [乱序到达]
-            // 只存包，发 NACK，不提交
-            //if (CheckNackCooldown(m_rxNext)) {
-                TriggerNak(0, m_rxNext);
-                //m_lastNackTime = Simulator::Now();
-            //}
+        if (commitCount > 0) {
+            TriggerAck(0, m_rxNext);
+            ReleaseRxCredit(commitCount);
         }
     }
     return;
