@@ -2737,3 +2737,19 @@ date,id,ccmode,lbmode,cwh_tx_expiry_time,cwh_extra_reply_deadline,cwh_path_pause
 ./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/78487763/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/78487763/config.log 2>&1
 ./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/78487763/config.txt'
 
+04/11/26,73096489,0,0,1000,4,16,64,400,0,0,0,0,H100_8_0.00001_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/73096489/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/73096489/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/73096489/config.txt'
+
+04/11/26,817010465,0,0,1000,4,16,64,400,0,0,0,0,H100_8_0.0001_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/817010465/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/817010465/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/817010465/config.txt'
+
+04/11/26,399447931,0,0,1000,4,16,64,400,0,0,0,0,H100_8_0.0005_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/399447931/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/399447931/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/399447931/config.txt'
+
+04/11/26,332515121,0,0,1000,4,16,64,400,0,0,0,0,H100_8_0.001_OS2,200,AliStorage2019,40,0.1
+./waf --run 'scratch/network-load-balance /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/332515121/config.txt' > /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/332515121/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /home/liujiaqi/conweave-ns3-CBFC+GBN/mix/output/332515121/config.txt'
+
