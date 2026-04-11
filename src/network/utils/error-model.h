@@ -317,5 +317,38 @@ private:
 };
 
 
+/**
+ * \brief Gilbert-Elliott 两状态突发错误模型
+ *
+ * Good 状态不丢包，Bad 状态以概率 1 丢包。
+ * 通过 p (Good→Bad) 和 q (Bad→Good) 控制突发频率和长度。
+ * 整体平均错误率 = p / (p + q)。
+ *
+ * 用法：指定目标平均错误率和平均突发长度，模型自动计算 p 和 q。
+ */
+class GilbertElliottErrorModel : public ErrorModel
+{
+public:
+  static TypeId GetTypeId (void);
+  GilbertElliottErrorModel ();
+  virtual ~GilbertElliottErrorModel ();
+
+  /**
+   * \param avgErrorRate 目标平均错误率 (如 0.001)
+   * \param avgBurstLength 平均突发长度 (丢包连续个数，如 10)
+   */
+  void SetParameters (double avgErrorRate, double avgBurstLength);
+  void SetStream (int64_t stream);
+
+private:
+  virtual bool DoCorrupt (Ptr<Packet> p);
+  virtual void DoReset (void);
+
+  bool   m_inBadState;       // 当前是否处于 Bad 状态
+  double m_pGoodToBad;       // Good → Bad 转移概率
+  double m_qBadToGood;       // Bad → Good 转移概率
+  Ptr<UniformRandomVariable> m_rng;
+};
+
 } // namespace ns3
 #endif
