@@ -261,7 +261,7 @@ QbbNetDevice::QbbNetDevice() {
     nakseq = 0;//如果有nak要发，这个nak是针对哪个序号的
     nakbitmapHigh = 0;
     nakbitmapLow = 0;
-    m_rxBuffer = Create<RxBuffer>(256);//初始化构造rxbuffer，容量等于初始信用（单位是flit）
+    m_rxBuffer = Create<RxBuffer>(256 + 256 / 4);//初始化构造rxbuffer，容量需 >= m_bufferSize，InitCredit 会覆盖
     m_mmu = nullptr;//这里得看一下switchnode怎么赋值的
     m_switchNode = nullptr;//这里得看一下switchnode怎么赋值的
     m_portId = 0;
@@ -276,9 +276,12 @@ QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
 void QbbNetDevice::InitCredit() {
     // 在属性系统完成设置后调用（即 qbb.Install() 之后），
     // 用 m_creditInit 覆盖构造函数中硬编码的 256。
+    // 25% 余量补偿信用更新的流水线延迟，避免发送端因等待信用而空转。
+    // 关键：RxBuffer 的物理容量必须 >= m_bufferSize，否则 StorePacket 会因
+    // distFromHead >= m_size 而静默丢包，产生不必要的 NAK 和重传。
     m_bufferSize = m_creditInit + m_creditInit / 4;
     m_txLimit = (uint16_t)m_creditInit;
-    m_rxBuffer = Create<RxBuffer>((uint16_t)m_creditInit);
+    m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);  // 用 m_bufferSize 而非 m_creditInit
 }
 
 void QbbNetDevice::UpdateRtoTimer() {
@@ -331,40 +334,52 @@ void QbbNetDevice::UpdateRtoTimer() {
   }
   void QbbNetDevice::HandleRtoTimeout() {
       // -------------------------------------------------------
-      // 职责：只重传窗口 HEAD（最老的未确认 flit），配合指数退避
-      // 原理：HEAD 是阻塞窗口推进的关键；其余 seq 靠 NAK 驱动按需重传
-      // 好处：相比"全部重传"，事件数从 O(窗口大小) 降为 O(1)，彻底消除 RTO 风暴
+      // SR 模式：RTO 超时时重传窗口中所有未确认且未被选择性确认的 flit
+      // 使用窗口 HEAD 的 retryCount 做指数退避
+      // 原因：只重传 HEAD 在 NAK 丢失时恢复太慢，需要多轮 RTO
       // -------------------------------------------------------
       Time now = Simulator::Now();
       bool anyRetrans = false;
 
-      // 只对窗口头部（最老未确认 seq）触发重传
+      // 用 HEAD（第一个未确认 flit）的 retryCount 计算退避 RTO
+      uint32_t headRetryCount = 0;
+      Time headSendTime;
+      for (const auto& meta : m_slidingWindow) {
+          if (!meta.isAcked) {
+              headRetryCount = meta.retryCount;
+              headSendTime = meta.sendTime;
+              break;
+          }
+      }
+      uint32_t backoffShift = (headRetryCount < 7) ? headRetryCount : 7;
+      Time effectiveRto = Time(m_rtoValue.GetNanoSeconds() * (1u << backoffShift));
+
+      if ((now - headSendTime) < effectiveRto) {
+          // 还没到期，重新调度
+          UpdateRtoTimer();
+          return;
+      }
+
+      // SR: 重传窗口中所有未确认、未在重传队列中的 flit
       for (auto& meta : m_slidingWindow) {
           if (meta.isAcked) continue;
           if (meta.isRetransmitting) continue;
-
-          // 计算本次应有的 RTO（指数退避，上限 2^7 = 128 倍基础 RTO）
-          uint32_t backoffShift = (meta.retryCount < 7) ? meta.retryCount : 7;
-          Time effectiveRto = Time(m_rtoValue.GetNanoSeconds() * (1u << backoffShift));
-
-          if ((now - meta.sendTime) >= effectiveRto) {
-              meta.isRetransmitting = true;
-              meta.retryCount++;
-              m_retransQueue.push_back(meta.seqNum);
-              anyRetrans = true;
-
-              if (meta.retryCount <= 20 || meta.retryCount % 100 == 0) {
-                  std::cout << "[RTO] Node=" << m_node->GetId()
-                            << " Dev=" << m_ifIndex
-                            << " Seq=" << meta.seqNum
-                            << " Retry=" << meta.retryCount
-                            << " RTO=" << effectiveRto.GetMicroSeconds() << "us" << std::endl;
-              }
-          }
-          break; // 只处理 HEAD，不扫描后续 seq
+          meta.isRetransmitting = true;
+          meta.retryCount++;
+          m_retransQueue.push_back(meta.seqNum);
+          anyRetrans = true;
       }
 
-      // 重新设置定时器
+      if (anyRetrans) {
+          if (headRetryCount + 1 <= 20 || (headRetryCount + 1) % 100 == 0) {
+              std::cout << "[RTO-SR] Node=" << m_node->GetId()
+                        << " Dev=" << m_ifIndex
+                        << " WindowSize=" << m_slidingWindow.size()
+                        << " Retry=" << headRetryCount + 1
+                        << " RTO=" << effectiveRto.GetMicroSeconds() << "us" << std::endl;
+          }
+      }
+
       UpdateRtoTimer();
 
       if (anyRetrans && m_txMachineState == READY) {
@@ -1140,6 +1155,8 @@ void QbbNetDevice::HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_
       if (spaceFreed && m_switchNode) {
           m_switchNode->NotifySpaceAvailable();
       }
+
+      UpdateRtoTimer();  // 位图处理后窗口状态变化，重新校准定时器
 }
 
 void QbbNetDevice::PrintBitmap(uint64_t high, uint64_t low) {
