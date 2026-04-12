@@ -34,7 +34,7 @@ def load_csv(path):
             parts = line.strip().split(',')
             if len(parts) < 9: continue
             try:
-                key = (parts[1], parts[2], parts[3])
+                key = (parts[1], parts[2], float(parts[3]))
                 data[key] = {
                     'mean': float(parts[6]),
                     'p99':  float(parts[7]),
@@ -48,7 +48,7 @@ def load_csv(path):
 def get_vals(data, traffic, msgsize, metric):
     vals = []
     for er in ERR_RATES:
-        key = (traffic, msgsize, str(er))
+        key = (traffic, msgsize, er)
         vals.append(data.get(key, {}).get(metric, np.nan))
     return vals
 
@@ -143,7 +143,7 @@ def print_summary(sr, gbn):
         print("-"*90)
         for ms in MSG_SIZES:
             for er in ERR_RATES:
-                key = (traffic, ms, str(er))
+                key = (traffic, ms, er)
                 g = gbn.get(key, {})
                 s = sr.get(key, {})
                 gm = g.get('mean', 0); sm = s.get('mean', 0)
