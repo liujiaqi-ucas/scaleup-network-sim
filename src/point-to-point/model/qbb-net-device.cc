@@ -110,56 +110,37 @@ int RdmaEgressQueue::GetNextQindex() {  // 从队列对里面选一个队列，�
     if (m_ackQ->GetNPackets() > 0) return -1;
 
     uint32_t fcount = m_qpGrp->GetN();
+    m_earliestPacing = Time(0);
 
     // 2. Round-Robin 轮询所有 QP
     for (uint32_t i = 1; i <= fcount; i++) {
-        // 计算当前检查的 QP 索引 (从上次结束的位置开始)
         uint32_t curr = (i + m_rrlast) % fcount;
 
-        // 3. 跳过已经结束的流
-        if (m_qpGrp->IsQpFinished(curr)) continue;//这个看懂了
+        if (m_qpGrp->IsQpFinished(curr)) continue;
 
         Ptr<RdmaQueuePair> qp = m_qpGrp->Get(curr);
 
-
-        // =======================================================
-        // 条件 B: 数据检查 (Data Availability)
-        // =======================================================
-        // 只要有剩余字节没发完，就算有资格
-        // 【修改点】：去掉了 IsWinBound 和 IRN 检查，只看有没有数据
         if (qp->GetBytesLeft() == 0) {
-            // 如果没数据了，检查是否彻底结束
             if (qp->IsFinishedConst()) {
                 m_qpGrp->SetQpFinished(curr);
-                // 【核心调用】这会直接触发 RdmaHw::DeleteQueuePair(qp)
                  m_txQpFinishCb(qp);
             }
             continue;
         }
 
-        // =======================================================
-        // 条件 C: 物理层 Pacing (Inter-frame Gap)
-        // =======================================================
-        // 检查这个 QP 是否发得太快了，需要物理层冷却
-        // 这里的 Simulator::Now() 比较的是纳秒级的时间戳
-        if (qp->m_nextAvail.GetTimeStep() > Simulator::Now().GetTimeStep()) {//这个暂时还是存疑
-            continue;  // 还在冷却中，跳过
+        if (qp->m_nextAvail.GetTimeStep() > Simulator::Now().GetTimeStep()) {
+            // 记录最早的 pacing 到期时间，供调用方安排定时唤醒
+            if (m_earliestPacing.IsZero() || qp->m_nextAvail < m_earliestPacing) {
+                m_earliestPacing = qp->m_nextAvail;
+            }
+            continue;
         }
-
-        // =======================================================
-        // 结论：找到一个可以发送的 QP！
-        // =======================================================
-        // 注意：这里不检查 Credit。
-        // Credit 检查由 Device 层的 DequeueAndTransmit 负责。
-        // 如果这里返回了 curr，但在 Device 层发现没 Credit，
-        // Device 层会直接 return，不进行实际发送，从而实现了信用流控。
 
         return curr;
     }
 
-    // 找了一圈都没东西可发
     return -1024;
-    
+
 }
 
 int RdmaEgressQueue::GetLastQueue() { return m_qlast; }
@@ -933,10 +914,16 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                 
             }else{
                 //代表没有东西要发送，那就得判断一下是不是又ack或者credit的需求了
-                //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"调度器没有给我需要发送的队列了"<<std::endl;
             }
-            //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"转发队列目前是空，我要看看有没有ack或者credit需求"<<std::endl;
          // 没包可发 (队列空 或 被流控阻塞)
+        // 如果是因为 QP pacing 冷却导致没包可发，安排定时唤醒
+        // 修复: ns-3 Time 纳秒精度截断导致 flit 传输提前完成但 pacing 未过期时 NIC 空转
+        Time ep = m_rdmaEQ->GetEarliestPacingTime();
+        if (!ep.IsZero() && ep > Simulator::Now()) {
+            Time delta = ep - Simulator::Now();
+            if (!m_nextSend.IsExpired()) Simulator::Cancel(m_nextSend);
+            m_nextSend = Simulator::Schedule(delta, &QbbNetDevice::DequeueAndTransmit, this);
+        }
         // 检查是否有欠下的 ACK 需要单独发送 (兜底机制)
         // 还得检查是不是有 credit 要发送
         generteStandaloneControl();

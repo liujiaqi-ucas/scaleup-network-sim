@@ -74,6 +74,7 @@ public:
 	RdmaEgressQueue();
 	Ptr<Packet> DequeueQindex(int qIndex);
 	int GetNextQindex();
+	Time GetEarliestPacingTime() const { return m_earliestPacing; }
 	int GetLastQueue();
 	uint32_t GetNBytes(uint32_t qIndex);
 	uint32_t GetFlowCount(void);
@@ -84,6 +85,9 @@ public:
 
 	TracedCallback<Ptr<const Packet>, uint32_t> m_traceRdmaEnqueue;
 	TracedCallback<Ptr<const Packet>, uint32_t> m_traceRdmaDequeue;
+
+private:
+	Time m_earliestPacing;
 };
 
 // 极其轻量级的“户口本”，完美解耦物理数据
