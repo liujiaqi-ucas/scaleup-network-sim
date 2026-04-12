@@ -96,7 +96,6 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
     // -----------------------------------------------------
     int currentOwner = m_txPortLocks[txPortId];
     if (currentOwner != -1 && currentOwner != rxPortId) {
-        // 【公平唤醒】加入该 TX 端口的 FIFO 等待队列（查重防止重复入队）
         if (m_inLockQueue.find(rxPortId) == m_inLockQueue.end()) {
             m_lockWaiters[txPortId].push_back(rxPortId);
             m_inLockQueue.insert(rxPortId);
@@ -109,7 +108,6 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
     // -----------------------------------------------------
     int index = m_mmu->AllocateSpace(txPortId);
     if (index == -1) {
-        // 【公平唤醒】加入全局 MMU FIFO 等待队列（查重防止重复入队）
         if (m_inMmuQueue.find(rxPortId) == m_inMmuQueue.end()) {
             m_mmuWaiters.push_back(rxPortId);
             m_inMmuQueue.insert(rxPortId);
