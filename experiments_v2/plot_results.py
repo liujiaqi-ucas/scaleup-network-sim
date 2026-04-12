@@ -71,6 +71,13 @@ def plot_combined(traffic, sr, gbn):
             ax.plot(ERR_RATES, gbn_v, 's-', color='#2196F3', linewidth=2, markersize=6, label='GBN')
             ax.plot(ERR_RATES, sr_v,  'o-', color='#FF5722', linewidth=2, markersize=6, label='SR')
 
+            # Y轴紧凑范围：数据最小值下浮10%，最大值上浮10%
+            all_v = [v for v in gbn_v + sr_v if not np.isnan(v) and v > 0]
+            if all_v:
+                ymin = min(all_v) * 0.90
+                ymax = max(all_v) * 1.10
+                ax.set_ylim(ymin, ymax)
+
             ax.set_xscale('log')
             if row == 1:
                 ax.set_xlabel('Link Error Rate', fontsize=10)
@@ -84,7 +91,6 @@ def plot_combined(traffic, sr, gbn):
                 ax.set_ylabel(ylabel, fontsize=10)
             ax.legend(fontsize=8, loc='upper left')
             ax.grid(True, alpha=0.3)
-            ax.set_ylim(bottom=0)
 
     plt.tight_layout()
     path = os.path.join(OUT_DIR, f"compare_{traffic}.png")
