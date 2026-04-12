@@ -57,11 +57,11 @@ def get_vals(data, traffic, msgsize, metric):
 # 上排: P99 FCT, 下排: Mean FCT
 # =========================================================
 def plot_combined(traffic, sr, gbn):
-    fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+    fig, axes = plt.subplots(3, 4, figsize=(18, 11))
     fig.suptitle(f"{TRAFFIC_LABELS[traffic]} — GBN vs SR  (H100 8-GPU, CBFC, pacing fixed)",
                  fontsize=14, fontweight='bold')
 
-    metrics = [('p99', 'P99 FCT (μs)'), ('mean', 'Mean FCT (μs)')]
+    metrics = [('p99', 'P99 FCT (μs)'), ('mean', 'Mean FCT (μs)'), ('jct', 'JCT (μs)')]
     for row, (metric, ylabel) in enumerate(metrics):
         for col, (ms, slabel) in enumerate(zip(MSG_SIZES, SIZE_LABELS)):
             ax = axes[row][col]
@@ -71,7 +71,7 @@ def plot_combined(traffic, sr, gbn):
             ax.plot(ERR_RATES, gbn_v, 's-', color='#2196F3', linewidth=2, markersize=6, label='GBN')
             ax.plot(ERR_RATES, sr_v,  'o-', color='#FF5722', linewidth=2, markersize=6, label='SR')
 
-            # Y轴紧凑范围：数据最小值下浮10%，最大值上浮10%
+            # Y轴紧凑范围
             all_v = [v for v in gbn_v + sr_v if not np.isnan(v) and v > 0]
             if all_v:
                 ymin = min(all_v) * 0.90
@@ -79,13 +79,14 @@ def plot_combined(traffic, sr, gbn):
                 ax.set_ylim(ymin, ymax)
 
             ax.set_xscale('log')
-            if row == 1:
+            if row == 2:
                 ax.set_xlabel('Link Error Rate', fontsize=10)
                 ax.set_xticks(ERR_RATES)
                 ax.set_xticklabels([f'{e:.0e}' for e in ERR_RATES], fontsize=7, rotation=30)
             else:
                 ax.set_xticks(ERR_RATES)
                 ax.set_xticklabels([])
+            if row == 0:
                 ax.set_title(slabel, fontsize=12, fontweight='bold')
             if col == 0:
                 ax.set_ylabel(ylabel, fontsize=10)
@@ -103,13 +104,13 @@ def plot_combined(traffic, sr, gbn):
 # 一张图, 2行(allreduce/alltoall) × 2列(mean/p99)
 # =========================================================
 def plot_speedup(sr, gbn):
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig, axes = plt.subplots(2, 3, figsize=(16, 8))
     fig.suptitle("SR vs GBN Speedup Ratio  (ratio < 1 → SR faster)",
                  fontsize=14, fontweight='bold')
 
     colors = ['#1976D2', '#388E3C', '#F57C00', '#D32F2F']
     for row, traffic in enumerate(TRAFFICS):
-        for col, (metric, mlabel) in enumerate([('mean', 'Mean FCT'), ('p99', 'P99 FCT')]):
+        for col, (metric, mlabel) in enumerate([('mean', 'Mean FCT'), ('p99', 'P99 FCT'), ('jct', 'JCT')]):
             ax = axes[row][col]
             for i, (ms, slabel) in enumerate(zip(MSG_SIZES, SIZE_LABELS)):
                 gbn_v = get_vals(gbn, traffic, ms, metric)
@@ -124,7 +125,7 @@ def plot_speedup(sr, gbn):
             ax.set_xticks(ERR_RATES)
             ax.set_xticklabels([f'{e:.0e}' for e in ERR_RATES], fontsize=7, rotation=30)
             if col == 0:
-                ax.set_ylabel(f'SR / GBN ratio ({mlabel})', fontsize=10)
+                ax.set_ylabel('SR / GBN ratio', fontsize=10)
             ax.set_title(f"{TRAFFIC_LABELS[traffic]} — {mlabel}", fontsize=11, fontweight='bold')
             ax.legend(fontsize=8)
             ax.grid(True, alpha=0.3)
