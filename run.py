@@ -522,8 +522,10 @@ def main():
     # 直接调用新脚本，传入 ID 即可
     # 注意：确保 analyze_scaleup.py 在当前目录下
     analyze_cmd = "python3 analyze_scaleup.py -id {config_ID} -fdir mix".format(config_ID=config_ID)
-    
-    os.system(analyze_cmd)
+
+    # NVL72大规模实验跳过分析，避免IO卡死
+    if '72' not in topo:
+        os.system(analyze_cmd)
     # -----------------------------------------------------------
     if lb_mode == 9: # ConWeave Logging
         ################################################################
