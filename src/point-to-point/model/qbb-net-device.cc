@@ -1223,7 +1223,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     }
 
     if (m_receiveErrorModel && m_receiveErrorModel->IsCorrupt(packet)) {
-        std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包发生了错误，直接丢弃"<<std::endl;
+        //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包发生了错误，直接丢弃"<<std::endl;
     CommonHeader co;
     packet->RemoveHeader(co);
     int cotype=co.GetFlitType();
