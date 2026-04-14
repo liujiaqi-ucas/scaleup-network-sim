@@ -97,9 +97,10 @@ for ERRRATE in $ERR_RATES; do
     NUM_ERRORS=$(grep -c "发生了错误" "$LOG" 2>/dev/null || echo 0)
 
     # 计算 mean, p99, JCT=max(start+fct)-min(start)
-    python3 << PYEOF >> "$CSV"
+    python3 -c "
+import sys
 fcts, starts = [], []
-for line in open('$FCT'):
+for line in open('${FCT}'):
     parts = line.strip().split()
     if len(parts) >= 8:
         fcts.append(int(parts[6]))
@@ -110,8 +111,10 @@ mean = sum(fcts)/n/1000
 p99 = fcts_sorted[int(n*0.99)]/1000
 ends = [s+f for s,f in zip(starts, fcts)]
 jct = (max(ends)-min(starts))/1000
-print('$PROTOCOL,alltoall,$MSGSIZE,$ERRRATE,$NUM_FLOWS,$NUM_ERRORS,' + '%.2f,%.2f,%.2f' % (mean, p99, jct))
-PYEOF
+row = '${PROTOCOL},alltoall,${MSGSIZE},${ERRRATE},${NUM_FLOWS},${NUM_ERRORS},'
+row += str(round(mean,2)) + ',' + str(round(p99,2)) + ',' + str(round(jct,2))
+print(row)
+" >> "$CSV"
 
     echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} (${ELAPSED}s) ✓"
   done
