@@ -211,6 +211,10 @@ def main():
                         type=int, default=10000, help="interval of sampling statistics for queue status (default: 10000ns)")
     parser.add_argument('--alpha', dest='alpha', action='store',
                         type=float, default=0.5, help="全局固定 MMU DT alpha 值 (default: 0.5)")
+    parser.add_argument('--pool', dest='pool', action='store',
+                        type=int, default=-1, help="覆盖 mmu_pool_size (flit数, -1表示用拓扑默认值)")
+    parser.add_argument('--credit', dest='credit', action='store',
+                        type=int, default=-1, help="覆盖 credit_init (flit数, -1表示用拓扑默认值)")
     print("77777777")
     # #### CONWEAVE PARAMETERS ####
     # parser.add_argument('--cwh_extra_reply_deadline', dest='cwh_extra_reply_deadline', action='store',
@@ -427,6 +431,11 @@ def main():
     credit_init = ll_params["credit_init"]
     rto_us = ll_params["rto_us"]
     mmu_global_alpha = args.alpha
+    # 允许命令行覆盖默认值（用于缓冲区大小对比实验）
+    if args.pool > 0:
+        mmu_pool_size = args.pool
+    if args.credit > 0:
+        credit_init = args.credit
     print("Link-layer params: pool={}, minG={}, credit={}, rto={}us, alpha={}".format(
         mmu_pool_size, mmu_min_guarantee, credit_init, rto_us, mmu_global_alpha))
 
