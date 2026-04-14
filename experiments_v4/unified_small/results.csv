@@ -1,0 +1,10 @@
+unified_small,allreduce,64mb,0.00001,112,0,78.80,84.77,1210.80
+unified_small,alltoall,64mb,0.00001,56,0,1826.89,3095.98,3095.98
+unified_small,allreduce,64mb,0.00005,112,0,78.88,84.98,1213.25
+unified_small,alltoall,64mb,0.00005,56,0,1832.22,3115.50,3115.50
+unified_small,allreduce,64mb,0.0001,112,0,79.07,85.19,1215.40
+unified_small,alltoall,64mb,0.0001,56,0,1855.92,3195.97,3195.97
+unified_small,allreduce,64mb,0.0005,112,0,79.94,86.81,1231.26
+unified_small,alltoall,64mb,0.0005,56,0,1882.79,3233.02,3233.02
+unified_small,allreduce,64mb,0.001,112,0,81.46,88.04,1284.90
+unified_small,alltoall,64mb,0.001,56,0,1916.90,3280.39,3280.39
