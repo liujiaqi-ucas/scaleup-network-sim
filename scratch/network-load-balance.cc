@@ -732,6 +732,15 @@ void stop_simulation_middle() {
             conweave_history_print();
         }
         Simulator::Stop(MilliSeconds(1));  // finish soon, stop this schedule (NECESSARY!)
+
+        // NVL72大规模拓扑：所有流完成后关闭输出文件并强制退出，
+        // 跳过Simulator::Destroy()避免数万个残留timer导致长时间阻塞
+        if (flow_num >= 1000) {
+            fflush(stdout);
+            fflush(stderr);
+            if (fct_output) { fflush(fct_output); fclose(fct_output); }
+            exit(0);
+        }
         return;
     }
 
@@ -2131,9 +2140,8 @@ std::cout<<"333333333"<<std::endl;
     /*-----------------------------------------------------------------------------*/
     /*----- we don't need below. Just we can enforce to close this simulation. -----*/
     /*-----------------------------------------------------------------------------*/
-    Simulator::Destroy();
-    NS_LOG_INFO("Total number of packets: " << RdmaHw::nAllPkts);
-    NS_LOG_INFO("Done.");
+    // NVL72大规模拓扑下Destroy()耗时极长，直接强制退出
     endt = clock();
     std::cerr << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
+    exit(0);  // 跳过Simulator::Destroy()，避免大规模拓扑长时间阻塞
 }
