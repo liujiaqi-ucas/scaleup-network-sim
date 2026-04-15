@@ -14,7 +14,8 @@ enum FlitType {
   FLIT_TYPE_DATA   = 0, // 数据 Flit
   FLIT_TYPE_NACK   = 1, // NACK 控制 Flit
   FLIT_TYPE_ACK    = 2, // 累积 ACK (可选)
-  FLIT_TYPE_CREDIT = 3  // 流控 Credit (可选)
+  FLIT_TYPE_CREDIT = 3, // 流控 Credit (可选)
+  FLIT_TYPE_PFC    = 4  // PFC PAUSE/RESUME 控制帧
 };
 
 /**

@@ -96,6 +96,8 @@ MMU_MIN_GUARANTEE {mmu_min_guarantee}
 CREDIT_INIT {credit_init}
 RTO_US {rto_us}
 MMU_GLOBAL_ALPHA {mmu_global_alpha}
+PFC_HIGH_THRESHOLD {pfc_high_threshold}
+PFC_LOW_THRESHOLD {pfc_low_threshold}
 """
 
 
@@ -485,7 +487,9 @@ def main():
                                         kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map,
                                         mmu_pool_size=mmu_pool_size, mmu_min_guarantee=mmu_min_guarantee,
                                         credit_init=credit_init, rto_us=rto_us,
-                                        mmu_global_alpha=mmu_global_alpha)
+                                        mmu_global_alpha=mmu_global_alpha,
+                                        pfc_high_threshold=0.80,
+                                        pfc_low_threshold=0.20)
     with open(config_name, "w") as file:
         file.write(config)
     # run program

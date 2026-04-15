@@ -89,6 +89,8 @@ uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
 uint32_t rto_us = 500;            // RTO 超时值 (微秒) — 从20us增大以减少RTO风暴事件数
 double mmu_global_alpha = 0.5;    // 全局固定 α 值
 double pause_time = 5;  // PFC pause, microseconds
+double pfc_high_threshold = 0.80; // PFC 高水位 (占 bufferSize 比例)
+double pfc_low_threshold  = 0.20; // PFC 低水位 (占 bufferSize 比例)
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
 // queue length monitoring time is not used in this simulator
 // uint32_t qlen_dump_interval = 100000000, qlen_mon_interval = 1000;  // ns
@@ -1302,6 +1304,16 @@ int main(int argc, char *argv[]) {
                 conf >> v;
                 mmu_global_alpha = v;
                 std::cerr << "MMU_GLOBAL_ALPHA\t\t\t" << mmu_global_alpha << "\n";
+            } else if (key.compare("PFC_HIGH_THRESHOLD") == 0) {
+                double v;
+                conf >> v;
+                pfc_high_threshold = v;
+                std::cerr << "PFC_HIGH_THRESHOLD\t\t" << pfc_high_threshold << "\n";
+            } else if (key.compare("PFC_LOW_THRESHOLD") == 0) {
+                double v;
+                conf >> v;
+                pfc_low_threshold = v;
+                std::cerr << "PFC_LOW_THRESHOLD\t\t" << pfc_low_threshold << "\n";
             }
 
             fflush(stdout);
@@ -1338,6 +1350,8 @@ int main(int argc, char *argv[]) {
     Config::SetDefault("ns3::QbbNetDevice::QbbEnabled", BooleanValue(enable_pfc));
     Config::SetDefault("ns3::QbbNetDevice::CreditInit", UintegerValue(credit_init));
     Config::SetDefault("ns3::QbbNetDevice::RtoValue", TimeValue(MicroSeconds(rto_us)));
+    Config::SetDefault("ns3::QbbNetDevice::PfcHighThreshold", DoubleValue(pfc_high_threshold));
+    Config::SetDefault("ns3::QbbNetDevice::PfcLowThreshold", DoubleValue(pfc_low_threshold));
 
     if (cc_mode != 1 && lb_mode == 9) {
         std::cout << "Currently, ConWeave supports only DCQCN congestion control for RDMA. \nIf "

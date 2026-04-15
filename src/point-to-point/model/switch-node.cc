@@ -112,6 +112,12 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
             m_mmuWaiters.push_back(rxPortId);
             m_inMmuQueue.insert(rxPortId);
         }
+        // PFC: MMU 满了，让被阻塞的 RX 端口向上游发 PAUSE
+        Ptr<QbbNetDevice> rxDev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
+        if (rxDev && rxDev->IsQbbEnabled() && !rxDev->m_pfcPauseSent) {
+            rxDev->m_pfcPauseSent = true;
+            rxDev->SendPfc(0, 0);
+        }
         return BLOCKED_BY_MMU;
     }
 
@@ -185,6 +191,11 @@ void SwitchNode::NotifySpaceAvailable() {
 
         Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
         if (dev) {
+            // PFC: MMU 有空间了，让之前被暂停的端口发 RESUME 上游
+            if (dev->IsQbbEnabled() && dev->m_pfcPauseSent) {
+                dev->m_pfcPauseSent = false;
+                dev->SendPfc(0, 1);
+            }
             Simulator::ScheduleNow(&QbbNetDevice::TryForwardingRxBuffer, dev);
         }
     }

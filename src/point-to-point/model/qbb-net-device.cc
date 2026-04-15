@@ -226,7 +226,15 @@ TypeId QbbNetDevice::GetTypeId(void) {
             .AddAttribute("RtoValue", "RTO timeout value",
                           TimeValue(MicroSeconds(20)),
                           MakeTimeAccessor(&QbbNetDevice::m_rtoValue),
-                          MakeTimeChecker());
+                          MakeTimeChecker())
+            .AddAttribute("PfcHighThreshold", "RX buffer fraction to trigger PAUSE (PFC mode)",
+                          DoubleValue(0.80),
+                          MakeDoubleAccessor(&QbbNetDevice::m_pfcHighThreshold),
+                          MakeDoubleChecker<double>(0.0, 1.0))
+            .AddAttribute("PfcLowThreshold", "RX buffer fraction to trigger RESUME (PFC mode)",
+                          DoubleValue(0.20),
+                          MakeDoubleAccessor(&QbbNetDevice::m_pfcLowThreshold),
+                          MakeDoubleChecker<double>(0.0, 1.0));
 
     return tid;
 }
@@ -262,6 +270,13 @@ QbbNetDevice::QbbNetDevice() {
     //m_last_acked_seq = 0;
     m_rxNext = 0;
     m_txLimit = 256;//目前下游限制我发多少
+    // PFC 状态初始化
+    m_pfcPauseSent = false;
+    m_pfcHighMark = 0;
+    m_pfcLowMark = 0;
+    for (uint32_t i = 0; i < qCnt; i++) {
+        m_paused[i] = false;
+    }
 }
 
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
@@ -275,6 +290,12 @@ void QbbNetDevice::InitCredit() {
     m_bufferSize = m_creditInit + m_creditInit / 4;
     m_txLimit = (uint16_t)m_creditInit;
     m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);  // 用 m_bufferSize 而非 m_creditInit
+    // PFC 水位线
+    m_pfcHighMark = (uint32_t)(m_bufferSize * m_pfcHighThreshold);
+    m_pfcLowMark  = (uint32_t)(m_bufferSize * m_pfcLowThreshold);
+    if (m_qbbEnabled) {
+        m_txLimit = 0xFFFF; // PFC 模式下不用信用限制
+    }
 }
 
 void QbbNetDevice::UpdateRtoTimer() {
@@ -437,6 +458,7 @@ void QbbNetDevice::TransmitComplete(void) {
 }
 //********************************************************************************************/
 void QbbNetDevice::ReleaseRxCredit(uint16_t flitsFreed) {
+    if (m_qbbEnabled) return; // PFC 模式：跳过信用追踪
     //std::cout<<"Node "<<m_node->GetId()<<"  device "<<m_ifIndex<<"执行了releaserxcredit函数，m_rxCumulativeFreed目前是"<<m_rxCumulativeFreed<<std::endl;
     Ptr<SwitchNode> swNode = DynamicCast<SwitchNode>(m_node);
     m_rxCumulativeFreed += flitsFreed;
@@ -700,6 +722,7 @@ void QbbNetDevice::PiggybackAck(Ptr<Packet> p) {
     p->AddHeader(common); 
 }
 void QbbNetDevice::piggycredit(Ptr<Packet> p) {
+    if (m_qbbEnabled) return; // PFC 模式：不嵌入信用
     // 1. 剥离 CommonHeader
     CommonHeader common;
     p->RemoveHeader(common);
@@ -857,6 +880,11 @@ void QbbNetDevice::DequeueAndTransmit(void) {
           return;
       }
 
+    // PFC 守卫：被 PAUSE 时不发新数据（NAK 和重传照常，保证误码恢复）
+    if (m_qbbEnabled && m_paused[0]) {
+        generteStandaloneControl();
+        return;
+    }
     // 再检查有没有没切完的包
    if (m_currentLargePacket != nullptr) {
     //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"当前有大包正在切片，继续切片"<<std::endl;
@@ -903,8 +931,8 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                 // 2. 【关键】计算剩余信用 (利用无符号减法的回绕特性)
                 int16_t available = (int16_t)(limit - sent);
                 //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查，剩余信用是 "<<available<<"个flit"<<std::endl;
-                if (available >= (int16_t)requiredFlits) {
-                    // >>>>>> 钱够了！允许产生包 >>>>>>
+                if (m_qbbEnabled || available >= (int16_t)requiredFlits) {
+                    // >>>>>> PFC 模式无条件通过 / CBFC 模式钱够了 >>>>>>
                     //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"包级流控检查通过，信用够发这个包了，我要发了"<<std::endl;
                     // a. 真正产生包 (此时 QP 的 snd_nxt 才会增加)真增加了吗，这个得去看看
                     Ptr<Packet> p = m_rdmaEQ->DequeueQindex(qIndex);  // 调用这个函数才会更新qp轮询的那个值
@@ -1015,9 +1043,14 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         
     // =================================================================
     // 第三优先级是从转发队列取新包
+    // PFC 守卫：被下游 PAUSE 时不转发新包
+    if (m_qbbEnabled && m_paused[0]) {
+        generteStandaloneControl();
+        return;
+    }
     // =================================================================
     int16_t remaining = (int16_t)(m_txLimit - m_txTotalSent);
-    if (!m_txQueue.empty() && remaining > 0) {// 先检查转发队列里有没有包，如果有包了再检查信用够不够
+    if (!m_txQueue.empty() && (m_qbbEnabled || remaining > 0)) {// PFC 无条件通过 / CBFC 检查信用
         m_txTotalSent += 1; // 先预占一个信用位，允许这个包发出去了，剩下的信用就少了一个了
         // 从正常队列里拿出来的，是纯粹的物理下标
         int physicalIndex = m_txQueue.front();
@@ -1191,7 +1224,7 @@ void QbbNetDevice::TryForwardingRxBuffer() {
             m_rxStalled = false;
             creditflag = true; // 转发成功了，说明对端已经有机会收到包了，可能会有 ACK/NAK 和 Credit 要发了
             m_rxCumulativeFreed++; // 这个是我接收端释放的计数，捎带更新一下
-
+            if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 转发后释放空间，检查低水位
         }
         else if (status == BLOCKED_BY_LOCK || status == BLOCKED_BY_MMU) {
             // 转发失败！被锁或者被 MMU 卡住了
@@ -1250,6 +1283,19 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         DequeueAndTransmit(); // 处理完 NAK 后，尝试发送重传包或新包
         return;
     }
+    // PFC PAUSE/RESUME 帧处理
+    if (cotype == FLIT_TYPE_PFC) {
+        PauseHeader ph;
+        packet->PeekHeader(ph);
+        uint32_t pauseTime = ph.GetTime();
+        uint8_t qIndex = ph.GetQIndex();
+        if (pauseTime > 0) {
+            HandlePfcPause(qIndex, pauseTime);
+        } else {
+            HandlePfcResume(qIndex);
+        }
+        return;
+    }
     //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到一个flit了，不是nak，准备处理这个flit"<<std::endl;
     //下面就代表的是一个数据flit，可能有流控和ack捎带
     int packetsize=packet->GetSize();
@@ -1288,7 +1334,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         fh.setackflag(0);//收到捎带之后需要把这个捎带标记清除，要不然可能会让下游产生误解
     }
 
-    if (fh.HasCredit()) {
+    if (!m_qbbEnabled && fh.HasCredit()) {  // PFC 模式下忽略信用
         fh.setcreditflag(0);
         uint16_t currentCredit = fh.GetCreditLimit();
         m_txLimit = currentCredit;
@@ -1341,6 +1387,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 交换机后续转发需要完整的包，所以先把头加回去
         packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
+        if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 存包后检查水位
         // 无脑尝试提取连续包 (解耦的神来之笔)
         std::vector<Ptr<Packet>> readyPackets;
         uint32_t extractedCount = m_rxBuffer->CommitContiguous(readyPackets);
@@ -1401,6 +1448,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 2. 入库 (Store)
         packet->AddHeader(fh); // 先加头
         m_rxBuffer->StorePacket(seq, packet);
+        if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 存包后检查水位
         //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
         // 3. 提交循环 (Commit Loop)
         // 只有填坑成功才执行
@@ -1433,7 +1481,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
                 // 
                 
                     ReleaseRxCredit(commitCount); // 替换为你实际的发送 Credit 函数
-                
+                    if (m_qbbEnabled) CheckPfcThresholds(); // PFC: commit 后检查水位
             }
 
         } else {
@@ -1539,11 +1587,73 @@ void QbbNetDevice::UpdateNextAvail(Time t) {
         m_nextSend = Simulator::Schedule(delta, &QbbNetDevice::DequeueAndTransmit, this);
     }
 }
+// =========================================================
+// PFC 实现
+// =========================================================
+uint32_t QbbNetDevice::SendPfc(uint32_t qIndex, uint32_t type) {
+    Ptr<Packet> p = Create<Packet>(0);
+    PauseHeader ph;
+    if (type == 0) {
+        ph.SetTime(m_pausetime);
+    } else {
+        ph.SetTime(0); // time=0 表示 RESUME
+    }
+    ph.SetQLen(m_rxBuffer->GetCount());
+    ph.SetQIndex((uint8_t)qIndex);
+    p->AddHeader(ph);
+    CommonHeader co;
+    co.SetFlitType(FLIT_TYPE_PFC);
+    p->AddHeader(co);
+    m_tracePfc(type == 0 ? 1 : 0);
+    TransmitStart(p);
+    return 0;
+}
+
+void QbbNetDevice::CheckPfcThresholds() {
+    if (!m_qbbEnabled) return;
+    uint32_t occupancy = m_rxBuffer->GetCount();
+    if (occupancy >= m_pfcHighMark && !m_pfcPauseSent) {
+        m_pfcPauseSent = true;
+        SendPfc(0, 0); // PAUSE
+    } else if (occupancy <= m_pfcLowMark && m_pfcPauseSent) {
+        m_pfcPauseSent = false;
+        SendPfc(0, 1); // RESUME
+    }
+}
+
+void QbbNetDevice::HandlePfcPause(uint32_t qIndex, uint32_t pauseTime) {
+    if (qIndex >= qCnt) return;
+    m_paused[qIndex] = true;
+    if (m_resumeEvt[qIndex].IsRunning()) {
+        Simulator::Cancel(m_resumeEvt[qIndex]);
+    }
+    if (pauseTime > 0) {
+        m_resumeEvt[qIndex] = Simulator::Schedule(
+            MicroSeconds(pauseTime),
+            &QbbNetDevice::PfcResumeTimeout, this, qIndex);
+    }
+}
+
+void QbbNetDevice::HandlePfcResume(uint32_t qIndex) {
+    if (qIndex >= qCnt) return;
+    m_paused[qIndex] = false;
+    if (m_resumeEvt[qIndex].IsRunning()) {
+        Simulator::Cancel(m_resumeEvt[qIndex]);
+    }
+    if (m_txMachineState == READY) {
+        DequeueAndTransmit();
+    }
+}
+
+void QbbNetDevice::PfcResumeTimeout(uint32_t qIndex) {
+    if (qIndex >= qCnt) return;
+    m_paused[qIndex] = false;
+    if (m_txMachineState == READY) {
+        DequeueAndTransmit();
+    }
+}
+
 }  // namespace ns3
-
-
-
-
 
 
 
