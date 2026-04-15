@@ -169,9 +169,12 @@ public:
     uint32_t m_creditInit;    // 初始 credit (= m_bufferSize)
     Time m_rtoValue;          // RTO 超时值
 
-    // PFC 模式状态 (阈值已移至 SwitchMmu egress-based)
-    double m_pfcHighThreshold;     // 保留属性接口 (不再使用)
-    double m_pfcLowThreshold;      // 保留属性接口 (不再使用)
+    // PFC 模式状态
+    double m_pfcHighThreshold;     // 保留属性接口
+    double m_pfcLowThreshold;      // 保留属性接口
+    bool m_pfcSendFlag;            // 有 PFC PAUSE/RESUME 帧待发送
+    uint32_t m_pfcSendType;        // 0=PAUSE, 1=RESUME
+    uint8_t m_pfcSendQIndex;       // 目标队列索引
     //sr要维护的变量，发送端
    //uint32_t m_txUna;//窗口左边缘，最早发出去但是还没收到确认的SX
    //Ptr<ReplayBuffer> m_replayBuffer;//重传缓冲区

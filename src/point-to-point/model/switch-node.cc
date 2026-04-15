@@ -120,8 +120,9 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
     // -----------------------------------------------------
     m_mmu->StorePacket(index, flit); // 零拷贝存入金库
 
-    // PFC (egress-based): 分配成功后检查 egress port 是否越过 XOFF
-    if (m_mmu->CheckEgressPfc(txPortId) && !m_mmu->m_egressInPfc[txPortId]) {
+    // PFC (egress-based): 每次分配成功后都检查 egress > XOFF
+    // 对当前 RX port 发 PAUSE（幂等的，重复 PAUSE 无副作用，保证可靠性）
+    if (m_mmu->CheckEgressPfc(txPortId)) {
         m_mmu->m_egressInPfc[txPortId] = true;
         Ptr<QbbNetDevice> rxDev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
         if (rxDev && rxDev->IsQbbEnabled()) {
