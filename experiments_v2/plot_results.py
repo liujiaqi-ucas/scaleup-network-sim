@@ -19,8 +19,8 @@ OUT_DIR = os.path.join(SCRIPT_DIR, "plots")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 ERR_RATES  = [0.00001, 0.00005, 0.0001, 0.0005, 0.001]
-MSG_SIZES  = ["1mb", "4mb", "16mb", "64mb"]
-SIZE_LABELS = ["1 MB", "4 MB", "16 MB", "64 MB"]
+MSG_SIZES  = ["1mb", "4mb", "16mb", "64mb", "128mb", "256mb"]
+SIZE_LABELS = ["1 MB", "4 MB", "16 MB", "64 MB", "128 MB", "256 MB"]
 TRAFFICS   = ["allreduce", "alltoall"]
 TRAFFIC_LABELS = {"allreduce": "Allreduce", "alltoall": "Alltoall"}
 
@@ -57,7 +57,8 @@ def get_vals(data, traffic, msgsize, metric):
 # 上排: P99 FCT, 下排: Mean FCT
 # =========================================================
 def plot_combined(traffic, sr, gbn):
-    fig, axes = plt.subplots(3, 4, figsize=(18, 11))
+    ncols = len(MSG_SIZES)
+    fig, axes = plt.subplots(3, ncols, figsize=(ncols * 4, 11))
     fig.suptitle(f"{TRAFFIC_LABELS[traffic]} — GBN vs SR  (H100 8-GPU, CBFC, pacing fixed)",
                  fontsize=14, fontweight='bold')
 
@@ -104,11 +105,11 @@ def plot_combined(traffic, sr, gbn):
 # 一张图, 2行(allreduce/alltoall) × 2列(mean/p99)
 # =========================================================
 def plot_speedup(sr, gbn):
-    fig, axes = plt.subplots(2, 3, figsize=(16, 8))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 8))
     fig.suptitle("SR vs GBN Speedup Ratio  (ratio < 1 → SR faster)",
                  fontsize=14, fontweight='bold')
 
-    colors = ['#1976D2', '#388E3C', '#F57C00', '#D32F2F']
+    colors = ['#1976D2', '#388E3C', '#F57C00', '#D32F2F', '#7B1FA2', '#00838F']
     for row, traffic in enumerate(TRAFFICS):
         for col, (metric, mlabel) in enumerate([('mean', 'Mean FCT'), ('p99', 'P99 FCT'), ('jct', 'JCT')]):
             ax = axes[row][col]
