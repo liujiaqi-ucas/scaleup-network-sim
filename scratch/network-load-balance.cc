@@ -1646,6 +1646,17 @@ std::cout<<"333333333"<<std::endl;
             // 配置新的共享物理池 (替换旧的 ConfigNPort/ConfigBufferSize)
             sw->m_mmu->ConfigPool(mmu_pool_size, mmu_min_guarantee);
             sw->m_mmu->SetNode(GetPointer(sw));
+            // Egress PFC: 自动计算 XOFF/XON 阈值
+            if (enable_pfc) {
+                uint32_t numPorts = sw->GetNDevices() - 1;
+                if (numPorts == 0) numPorts = 1;
+                uint32_t perPortShare = mmu_pool_size / numPorts;
+                uint32_t xoff = (uint32_t)(perPortShare * pfc_high_threshold);
+                uint32_t xon  = (uint32_t)(perPortShare * pfc_low_threshold);
+                sw->m_mmu->ConfigPfcThresholds(xoff, xon);
+                std::cerr << "Switch " << i << ": PFC XOFF=" << xoff
+                          << " XON=" << xon << " (perPort=" << perPortShare << ")\n";
+            }
             //NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
                        // (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));
         }

@@ -41,11 +41,14 @@ SwitchMmu::SwitchMmu(void)
       m_warmupPeriods(5),
       m_evalInterval(MicroSeconds(10)) {
     m_portUsed.resize(pCnt, 0);
+    m_pfcXoffThreshold = 0;
+    m_pfcXonThreshold = 0;
     for (uint32_t i = 0; i < pCnt; i++) {
         m_portAlpha[i] = m_alphaMax;
         m_portRetransBuf[i] = 0;
         m_portWarmup[i] = 0;
         m_portWasActive[i] = false;
+        m_egressInPfc[i] = false;
     }
 }
 
@@ -211,6 +214,22 @@ void SwitchMmu::EvaluatePortAlpha() {
 
 uint32_t SwitchMmu::GetPoolFree() const {
     return m_poolFree;
+}
+
+// --- Egress-based PFC ---
+void SwitchMmu::ConfigPfcThresholds(uint32_t xoffThreshold, uint32_t xonThreshold) {
+    m_pfcXoffThreshold = xoffThreshold;
+    m_pfcXonThreshold = xonThreshold;
+}
+
+bool SwitchMmu::CheckEgressPfc(uint32_t txPortId) const {
+    if (m_pfcXoffThreshold == 0) return false;
+    return m_portUsed[txPortId] >= m_pfcXoffThreshold;
+}
+
+bool SwitchMmu::CheckEgressResume(uint32_t txPortId) const {
+    if (m_pfcXonThreshold == 0) return false;
+    return m_portUsed[txPortId] <= m_pfcXonThreshold;
 }
 
 }  // namespace ns3

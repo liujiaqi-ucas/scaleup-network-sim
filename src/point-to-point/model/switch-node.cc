@@ -112,12 +112,6 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
             m_mmuWaiters.push_back(rxPortId);
             m_inMmuQueue.insert(rxPortId);
         }
-        // PFC: MMU 满了，让被阻塞的 RX 端口向上游发 PAUSE
-        Ptr<QbbNetDevice> rxDev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
-        if (rxDev && rxDev->IsQbbEnabled() && !rxDev->m_pfcPauseSent) {
-            rxDev->m_pfcPauseSent = true;
-            rxDev->SendPfc(0, 0);
-        }
         return BLOCKED_BY_MMU;
     }
 
@@ -125,6 +119,16 @@ ForwardStatus SwitchNode::RequestForward(int rxPortId, Ptr<Packet> flit) {
     // 阶段三：存放与状态转移
     // -----------------------------------------------------
     m_mmu->StorePacket(index, flit); // 零拷贝存入金库
+
+    // PFC (egress-based): 分配成功后检查 egress port 是否越过 XOFF
+    if (m_mmu->CheckEgressPfc(txPortId) && !m_mmu->m_egressInPfc[txPortId]) {
+        m_mmu->m_egressInPfc[txPortId] = true;
+        Ptr<QbbNetDevice> rxDev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
+        if (rxDev && rxDev->IsQbbEnabled()) {
+            rxDev->SendPfc(0, 0); // PAUSE 上游
+            m_mmu->m_egressPfcPausedRx[txPortId].insert(rxPortId);
+        }
+    }
     Ptr<QbbNetDevice> txDevice = DynamicCast<QbbNetDevice>(GetDevice(txPortId));
 
     if (txDevice) {
@@ -183,7 +187,9 @@ void SwitchNode::NotifyLockReleased(int txPortId) {
 // 逐个唤醒，直到空闲空间耗尽。
 // 这样每次释放 1 个 flit 只唤醒 1 个等待者，消除雪崩效应。
 void SwitchNode::NotifySpaceAvailable() {
-    // 与 NotifyLockReleased 同理：延迟唤醒，避免同步级联
+    // Egress PFC: 检查是否有 egress port 降到 XON 以下需要 RESUME
+    CheckEgressPfcResume();
+    // 唤醒被 MMU 阻塞的 RX 端口
     if (!m_mmuWaiters.empty()) {
         int rxPortId = m_mmuWaiters.front();
         m_mmuWaiters.pop_front();
@@ -191,13 +197,24 @@ void SwitchNode::NotifySpaceAvailable() {
 
         Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(GetDevice(rxPortId));
         if (dev) {
-            // PFC: MMU 有空间了，让之前被暂停的端口发 RESUME 上游
-            if (dev->IsQbbEnabled() && dev->m_pfcPauseSent) {
-                dev->m_pfcPauseSent = false;
-                dev->SendPfc(0, 1);
-            }
             Simulator::ScheduleNow(&QbbNetDevice::TryForwardingRxBuffer, dev);
         }
+    }
+}
+
+void SwitchNode::CheckEgressPfcResume() {
+    for (uint32_t txPort = 0; txPort < SwitchMmu::pCnt; txPort++) {
+        if (!m_mmu->m_egressInPfc[txPort]) continue;
+        if (!m_mmu->CheckEgressResume(txPort)) continue;
+        // 该 egress port 降到 XON 以下，RESUME 之前被 PAUSE 的所有 RX 端口
+        m_mmu->m_egressInPfc[txPort] = false;
+        for (int rxPort : m_mmu->m_egressPfcPausedRx[txPort]) {
+            Ptr<QbbNetDevice> rxDev = DynamicCast<QbbNetDevice>(GetDevice(rxPort));
+            if (rxDev && rxDev->IsQbbEnabled()) {
+                rxDev->SendPfc(0, 1); // RESUME 上游
+            }
+        }
+        m_mmu->m_egressPfcPausedRx[txPort].clear();
     }
 }
 

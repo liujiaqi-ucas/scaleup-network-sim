@@ -5,6 +5,7 @@
 #include <ns3/random-variable-stream.h>
 
 #include <list>
+#include <set>
 #include <unordered_map>
 
 #include "ns3/conga-routing.h"
@@ -41,6 +42,15 @@ class SwitchMmu : public Object {
 
     uint32_t GetPoolFree() const;
     uint32_t GetPortUsed(uint32_t portId) const { return portId < m_portUsed.size() ? m_portUsed[portId] : 0; }
+
+    // --- Egress-based PFC ---
+    void ConfigPfcThresholds(uint32_t xoffThreshold, uint32_t xonThreshold);
+    bool CheckEgressPfc(uint32_t txPortId) const;    // egress port > XOFF?
+    bool CheckEgressResume(uint32_t txPortId) const;  // egress port < XON?
+    uint32_t m_pfcXoffThreshold;
+    uint32_t m_pfcXonThreshold;
+    bool m_egressInPfc[pCnt];                         // 是否处于 PFC PAUSE 状态
+    std::set<int> m_egressPfcPausedRx[pCnt];          // 每个 egress port 暂停了哪些 RX 端口
 
     CongaRouting m_congaRouting;
     LetflowRouting m_letflowRouting;

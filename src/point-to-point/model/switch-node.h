@@ -104,6 +104,7 @@ class SwitchNode : public Node {
     // 双重唤醒机制的导火索
     void NotifyLockReleased(int txPortId); // 导火索 1：通道解锁唤醒
     void NotifySpaceAvailable();           // 导火索 2：内存释放唤醒
+    void CheckEgressPfcResume();           // 检查所有 egress port 的 XON 条件
     ForwardStatus RequestForward(int rxPortId, Ptr<Packet> flit);
 };
 

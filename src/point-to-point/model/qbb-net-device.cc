@@ -271,9 +271,6 @@ QbbNetDevice::QbbNetDevice() {
     m_rxNext = 0;
     m_txLimit = 256;//目前下游限制我发多少
     // PFC 状态初始化
-    m_pfcPauseSent = false;
-    m_pfcHighMark = 0;
-    m_pfcLowMark = 0;
     for (uint32_t i = 0; i < qCnt; i++) {
         m_paused[i] = false;
     }
@@ -290,9 +287,7 @@ void QbbNetDevice::InitCredit() {
     m_bufferSize = m_creditInit + m_creditInit / 4;
     m_txLimit = (uint16_t)m_creditInit;
     m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);  // 用 m_bufferSize 而非 m_creditInit
-    // PFC 水位线
-    m_pfcHighMark = (uint32_t)(m_bufferSize * m_pfcHighThreshold);
-    m_pfcLowMark  = (uint32_t)(m_bufferSize * m_pfcLowThreshold);
+    // PFC 模式: 不用信用限制 (由 egress MMU XOFF/XON 管理)
     if (m_qbbEnabled) {
         m_txLimit = 0xFFFF; // PFC 模式下不用信用限制
     }
@@ -1224,7 +1219,7 @@ void QbbNetDevice::TryForwardingRxBuffer() {
             m_rxStalled = false;
             creditflag = true; // 转发成功了，说明对端已经有机会收到包了，可能会有 ACK/NAK 和 Credit 要发了
             m_rxCumulativeFreed++; // 这个是我接收端释放的计数，捎带更新一下
-            if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 转发后释放空间，检查低水位
+            // PFC 由 SwitchNode egress 管理，此处无需检查
         }
         else if (status == BLOCKED_BY_LOCK || status == BLOCKED_BY_MMU) {
             // 转发失败！被锁或者被 MMU 卡住了
@@ -1387,7 +1382,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 交换机后续转发需要完整的包，所以先把头加回去
         packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
-        if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 存包后检查水位
+        // PFC 由 SwitchNode egress 管理
         // 无脑尝试提取连续包 (解耦的神来之笔)
         std::vector<Ptr<Packet>> readyPackets;
         uint32_t extractedCount = m_rxBuffer->CommitContiguous(readyPackets);
@@ -1448,7 +1443,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         // 2. 入库 (Store)
         packet->AddHeader(fh); // 先加头
         m_rxBuffer->StorePacket(seq, packet);
-        if (m_qbbEnabled) CheckPfcThresholds(); // PFC: 存包后检查水位
+        // PFC 由 SwitchNode egress 管理
         //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
         // 3. 提交循环 (Commit Loop)
         // 只有填坑成功才执行
@@ -1481,7 +1476,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
                 // 
                 
                     ReleaseRxCredit(commitCount); // 替换为你实际的发送 Credit 函数
-                    if (m_qbbEnabled) CheckPfcThresholds(); // PFC: commit 后检查水位
+                    // PFC 由 SwitchNode egress 管理
             }
 
         } else {
@@ -1609,17 +1604,8 @@ uint32_t QbbNetDevice::SendPfc(uint32_t qIndex, uint32_t type) {
     return 0;
 }
 
-void QbbNetDevice::CheckPfcThresholds() {
-    if (!m_qbbEnabled) return;
-    uint32_t occupancy = m_rxBuffer->GetCount();
-    if (occupancy >= m_pfcHighMark && !m_pfcPauseSent) {
-        m_pfcPauseSent = true;
-        SendPfc(0, 0); // PAUSE
-    } else if (occupancy <= m_pfcLowMark && m_pfcPauseSent) {
-        m_pfcPauseSent = false;
-        SendPfc(0, 1); // RESUME
-    }
-}
+// CheckPfcThresholds 已废弃: PFC 由 SwitchNode/SwitchMmu egress 管理
+
 
 void QbbNetDevice::HandlePfcPause(uint32_t qIndex, uint32_t pauseTime) {
     if (qIndex >= qCnt) return;

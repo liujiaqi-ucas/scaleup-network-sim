@@ -169,12 +169,9 @@ public:
     uint32_t m_creditInit;    // 初始 credit (= m_bufferSize)
     Time m_rtoValue;          // RTO 超时值
 
-    // PFC 模式状态
-    bool m_pfcPauseSent;           // 是否已向上游发送过 PAUSE
-    uint32_t m_pfcHighMark;        // RX buffer 高水位 (flit 数)
-    uint32_t m_pfcLowMark;         // RX buffer 低水位 (flit 数)
-    double m_pfcHighThreshold;     // 高水位占 m_bufferSize 比例
-    double m_pfcLowThreshold;      // 低水位占 m_bufferSize 比例
+    // PFC 模式状态 (阈值已移至 SwitchMmu egress-based)
+    double m_pfcHighThreshold;     // 保留属性接口 (不再使用)
+    double m_pfcLowThreshold;      // 保留属性接口 (不再使用)
     //sr要维护的变量，发送端
    //uint32_t m_txUna;//窗口左边缘，最早发出去但是还没收到确认的SX
    //Ptr<ReplayBuffer> m_replayBuffer;//重传缓冲区
@@ -201,8 +198,7 @@ public:
      void HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_t bitmapHigh);  // 处理位图 NAK
      Ptr<Packet> GetFlitFromWindow(uint16_t seqNum);  // 辅助：从 slidingWindow 取 flit (自动分发到 MMU 或 localCopy)
      void FreeFlitInWindow(FlitMeta& meta);           // 辅助：释放一个 FlitMeta 的存储 (自动分发)
-     // PFC 方法
-     void CheckPfcThresholds();                          // 检查 RX buffer 水位，触发 PAUSE/RESUME
+     // PFC 方法 (CheckPfcThresholds 已废弃，由 SwitchMmu egress 管理)
      void HandlePfcPause(uint32_t qIndex, uint32_t pauseTime);  // TX 侧处理收到的 PAUSE
      void HandlePfcResume(uint32_t qIndex);              // TX 侧处理收到的 RESUME
      void PfcResumeTimeout(uint32_t qIndex);             // PAUSE 安全超时回调
