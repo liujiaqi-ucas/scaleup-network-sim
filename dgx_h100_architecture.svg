@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <style>
+      .title { font: bold 22px 'Arial', sans-serif; fill: #1a1a2e; }
+      .subtitle { font: 14px 'Arial', sans-serif; fill: #555; }
+      .gpu-label { font: bold 13px 'Arial', sans-serif; fill: white; }
+      .gpu-sub { font: 10px 'Arial', sans-serif; fill: #ddd; }
+      .switch-label { font: bold 12px 'Arial', sans-serif; fill: white; }
+      .cpu-label { font: bold 13px 'Arial', sans-serif; fill: white; }
+      .nic-label { font: bold 11px 'Arial', sans-serif; fill: white; }
+      .legend-label { font: 12px 'Arial', sans-serif; fill: #333; }
+      .section-label { font: bold 12px 'Arial', sans-serif; fill: #444; }
+      .bw-label { font: 10px 'Arial', sans-serif; fill: #777; }
+    </style>
+    <!-- NVLink gradient -->
+    <linearGradient id="nvlinkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#76b900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a8e063;stop-opacity:1" />
+    </linearGradient>
+    <!-- GPU gradient -->
+    <linearGradient id="gpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a6b3c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d4a28;stop-opacity:1" />
+    </linearGradient>
+    <!-- NVSwitch gradient -->
+    <linearGradient id="nvsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#76b900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4a7a00;stop-opacity:1" />
+    </linearGradient>
+    <!-- CPU gradient -->
+    <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0066cc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#004499;stop-opacity:1" />
+    </linearGradient>
+    <!-- NIC gradient -->
+    <linearGradient id="nicGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b2fc9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5c1a8a;stop-opacity:1" />
+    </linearGradient>
+    <!-- Box shadow -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#00000033"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#f0f4f8" rx="0"/>
+
+  <!-- Title -->
+  <text x="600" y="45" text-anchor="middle" class="title">NVIDIA DGX H100 系统架构图</text>
+  <text x="600" y="68" text-anchor="middle" class="subtitle">8× H100 SXM5 80GB | NVLink 4.0 | NVSwitch 3.0 | InfiniBand 400G</text>
+
+  <!-- ===== System boundary ===== -->
+  <rect x="30" y="85" width="1140" height="720" rx="12" fill="white" stroke="#bbb" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="45" y="105" class="section-label">DGX H100 System Enclosure</text>
+
+  <!-- ===== NVSwitch fabric (4 switches) ===== -->
+  <!-- NVSwitch row label -->
+  <text x="600" y="160" text-anchor="middle" class="section-label" fill="#4a7a00">NVLink 4.0 Fabric — 4× NVSwitch 3.0 (900 GB/s per switch)</text>
+
+  <!-- NVSwitch boxes -->
+  <rect x="180" y="168" width="130" height="48" rx="8" fill="url(#nvsGrad)" filter="url(#shadow)"/>
+  <text x="245" y="188" text-anchor="middle" class="switch-label">NVSwitch 3.0</text>
+  <text x="245" y="205" text-anchor="middle" class="gpu-sub">#0</text>
+
+  <rect x="370" y="168" width="130" height="48" rx="8" fill="url(#nvsGrad)" filter="url(#shadow)"/>
+  <text x="435" y="188" text-anchor="middle" class="switch-label">NVSwitch 3.0</text>
+  <text x="435" y="205" text-anchor="middle" class="gpu-sub">#1</text>
+
+  <rect x="700" y="168" width="130" height="48" rx="8" fill="url(#nvsGrad)" filter="url(#shadow)"/>
+  <text x="765" y="188" text-anchor="middle" class="switch-label">NVSwitch 3.0</text>
+  <text x="765" y="205" text-anchor="middle" class="gpu-sub">#2</text>
+
+  <rect x="890" y="168" width="130" height="48" rx="8" fill="url(#nvsGrad)" filter="url(#shadow)"/>
+  <text x="955" y="188" text-anchor="middle" class="switch-label">NVSwitch 3.0</text>
+  <text x="955" y="205" text-anchor="middle" class="gpu-sub">#3</text>
+
+  <!-- ===== 8 GPU boxes (two rows of 4) ===== -->
+  <!-- GPU row labels -->
+  <text x="85" y="300" class="section-label" fill="#1a6b3c">GPU Node 0-3</text>
+  <text x="85" y="560" class="section-label" fill="#1a6b3c">GPU Node 4-7</text>
+
+  <!-- Row 1: GPU 0-3 -->
+  <!-- GPU 0 -->
+  <rect x="80" y="310" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="152" y="340" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="152" y="358" text-anchor="middle" class="gpu-sub">GPU #0</text>
+  <text x="152" y="376" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="152" y="394" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="152" y="412" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="152" y="430" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 1 -->
+  <rect x="280" y="310" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="352" y="340" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="352" y="358" text-anchor="middle" class="gpu-sub">GPU #1</text>
+  <text x="352" y="376" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="352" y="394" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="352" y="412" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="352" y="430" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 2 -->
+  <rect x="480" y="310" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="552" y="340" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="552" y="358" text-anchor="middle" class="gpu-sub">GPU #2</text>
+  <text x="552" y="376" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="552" y="394" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="552" y="412" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="552" y="430" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 3 -->
+  <rect x="680" y="310" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="752" y="340" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="752" y="358" text-anchor="middle" class="gpu-sub">GPU #3</text>
+  <text x="752" y="376" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="752" y="394" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="752" y="412" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="752" y="430" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- Row 2: GPU 4-7 -->
+  <!-- GPU 4 -->
+  <rect x="80" y="570" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="152" y="600" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="152" y="618" text-anchor="middle" class="gpu-sub">GPU #4</text>
+  <text x="152" y="636" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="152" y="654" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="152" y="672" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="152" y="690" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 5 -->
+  <rect x="280" y="570" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="352" y="600" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="352" y="618" text-anchor="middle" class="gpu-sub">GPU #5</text>
+  <text x="352" y="636" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="352" y="654" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="352" y="672" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="352" y="690" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 6 -->
+  <rect x="480" y="570" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="552" y="600" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="552" y="618" text-anchor="middle" class="gpu-sub">GPU #6</text>
+  <text x="552" y="636" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="552" y="654" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="552" y="672" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="552" y="690" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- GPU 7 -->
+  <rect x="680" y="570" width="145" height="130" rx="10" fill="url(#gpuGrad)" filter="url(#shadow)"/>
+  <text x="752" y="600" text-anchor="middle" class="gpu-label">H100 SXM5</text>
+  <text x="752" y="618" text-anchor="middle" class="gpu-sub">GPU #7</text>
+  <text x="752" y="636" text-anchor="middle" class="gpu-sub">80 GB HBM3</text>
+  <text x="752" y="654" text-anchor="middle" class="gpu-sub">3.35 TB/s</text>
+  <text x="752" y="672" text-anchor="middle" class="gpu-sub">989 TFLOPS (FP16)</text>
+  <text x="752" y="690" text-anchor="middle" class="gpu-sub">NVL: 900 GB/s</text>
+
+  <!-- ===== CPU subsystem ===== -->
+  <text x="960" y="300" text-anchor="middle" class="section-label" fill="#004499">CPU / Memory</text>
+  <!-- CPU 0 -->
+  <rect x="890" y="310" width="140" height="70" rx="8" fill="url(#cpuGrad)" filter="url(#shadow)"/>
+  <text x="960" y="335" text-anchor="middle" class="cpu-label">Intel Xeon</text>
+  <text x="960" y="353" text-anchor="middle" class="gpu-sub">CPU #0 (56 cores)</text>
+  <text x="960" y="371" text-anchor="middle" class="gpu-sub">2 TB DDR5</text>
+
+  <!-- CPU 1 -->
+  <rect x="890" y="400" width="140" height="70" rx="8" fill="url(#cpuGrad)" filter="url(#shadow)"/>
+  <text x="960" y="425" text-anchor="middle" class="cpu-label">Intel Xeon</text>
+  <text x="960" y="443" text-anchor="middle" class="gpu-sub">CPU #1 (56 cores)</text>
+  <text x="960" y="461" text-anchor="middle" class="gpu-sub">2 TB DDR5</text>
+
+  <!-- ===== NIC subsystem ===== -->
+  <text x="960" y="530" text-anchor="middle" class="section-label" fill="#5c1a8a">Network (NDR)</text>
+
+  <!-- NIC 0 -->
+  <rect x="890" y="540" width="140" height="55" rx="8" fill="url(#nicGrad)" filter="url(#shadow)"/>
+  <text x="960" y="562" text-anchor="middle" class="nic-label">ConnectX-7 NIC #0</text>
+  <text x="960" y="580" text-anchor="middle" class="gpu-sub">400G InfiniBand NDR</text>
+
+  <!-- NIC 1 -->
+  <rect x="890" y="608" width="140" height="55" rx="8" fill="url(#nicGrad)" filter="url(#shadow)"/>
+  <text x="960" y="630" text-anchor="middle" class="nic-label">ConnectX-7 NIC #1</text>
+  <text x="960" y="648" text-anchor="middle" class="gpu-sub">400G InfiniBand NDR</text>
+
+  <!-- NIC 2 -->
+  <rect x="890" y="676" width="140" height="55" rx="8" fill="url(#nicGrad)" filter="url(#shadow)"/>
+  <text x="960" y="698" text-anchor="middle" class="nic-label">ConnectX-7 NIC #2-7</text>
+  <text x="960" y="716" text-anchor="middle" class="gpu-sub">400G × 6 = 3.2 Tb/s</text>
+
+  <!-- ===== NVLink connections: GPUs to NVSwitches ===== -->
+  <!-- Each GPU connects to all 4 NVSwitches via NVLink 4.0 -->
+  <!-- GPU0 top to NVSwitches -->
+  <line x1="152" y1="310" x2="245" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="152" y1="310" x2="435" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="152" y1="310" x2="765" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="152" y1="310" x2="955" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+
+  <!-- GPU1 top to NVSwitches -->
+  <line x1="352" y1="310" x2="245" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="352" y1="310" x2="435" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="352" y1="310" x2="765" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="352" y1="310" x2="955" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+
+  <!-- GPU2 top to NVSwitches -->
+  <line x1="552" y1="310" x2="245" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="552" y1="310" x2="435" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="552" y1="310" x2="765" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="552" y1="310" x2="955" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+
+  <!-- GPU3 top to NVSwitches -->
+  <line x1="752" y1="310" x2="245" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="752" y1="310" x2="435" y2="216" stroke="#76b900" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="752" y1="310" x2="765" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+  <line x1="752" y1="310" x2="955" y2="216" stroke="#76b900" stroke-width="2.5" stroke-opacity="0.85"/>
+
+  <!-- GPU4 bottom NVLink via side paths -->
+  <line x1="152" y1="570" x2="245" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="152" y1="570" x2="435" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="152" y1="570" x2="765" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="152" y1="570" x2="955" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+
+  <!-- GPU5 -->
+  <line x1="352" y1="570" x2="245" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="352" y1="570" x2="435" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="352" y1="570" x2="765" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="352" y1="570" x2="955" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+
+  <!-- GPU6 -->
+  <line x1="552" y1="570" x2="245" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="552" y1="570" x2="435" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="552" y1="570" x2="765" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="552" y1="570" x2="955" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+
+  <!-- GPU7 -->
+  <line x1="752" y1="570" x2="245" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="752" y1="570" x2="435" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="752" y1="570" x2="765" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+  <line x1="752" y1="570" x2="955" y2="216" stroke="#76b900" stroke-width="1.8" stroke-opacity="0.5" stroke-dasharray="4,3"/>
+
+  <!-- ===== PCIe connections: GPUs to CPUs ===== -->
+  <!-- GPU0-3 to CPU0 via PCIe Gen5 -->
+  <line x1="225" y1="375" x2="890" y2="345" stroke="#0066cc" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="6,4"/>
+  <line x1="352" y1="440" x2="890" y2="370" stroke="#0066cc" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="6,4"/>
+  <!-- GPU4-7 to CPU1 via PCIe Gen5 -->
+  <line x1="225" y1="635" x2="890" y2="435" stroke="#0066cc" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="6,4"/>
+  <line x1="352" y1="700" x2="890" y2="460" stroke="#0066cc" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="6,4"/>
+
+  <!-- ===== CPU-CPU interconnect ===== -->
+  <line x1="960" y1="380" x2="960" y2="400" stroke="#0066cc" stroke-width="2.5"/>
+  <text x="975" y="393" class="bw-label" fill="#0066cc">UPI</text>
+
+  <!-- ===== NIC to GPU connections ===== -->
+  <line x1="890" y1="567" x2="825" y2="440" stroke="#8b2fc9" stroke-width="1.5" stroke-opacity="0.7"/>
+  <line x1="890" y1="635" x2="825" y2="500" stroke="#8b2fc9" stroke-width="1.5" stroke-opacity="0.7"/>
+  <line x1="890" y1="703" x2="825" y2="560" stroke="#8b2fc9" stroke-width="1.5" stroke-opacity="0.7"/>
+
+  <!-- External network arrow -->
+  <line x1="1090" y1="567" x2="1150" y2="567" stroke="#8b2fc9" stroke-width="2.5"/>
+  <polygon points="1145,560 1158,567 1145,574" fill="#8b2fc9"/>
+  <text x="1165" y="555" class="legend-label" fill="#8b2fc9" font-size="11">To</text>
+  <text x="1165" y="571" class="legend-label" fill="#8b2fc9" font-size="11">IB/Eth</text>
+  <text x="1165" y="587" class="legend-label" fill="#8b2fc9" font-size="11">Network</text>
+
+  <!-- ===== Storage / NVMe ===== -->
+  <rect x="80" y="760" width="660" height="40" rx="8" fill="#555" filter="url(#shadow)"/>
+  <text x="410" y="780" text-anchor="middle" class="cpu-label" font-size="12">NVMe SSD RAID — 30 TB Usable (8× 3.84 TB)</text>
+  <text x="410" y="795" text-anchor="middle" class="gpu-sub">via PCIe Gen4 x4</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="40" y="820" width="1120" height="65" rx="8" fill="#e8eef5" stroke="#ccc" stroke-width="1"/>
+  <text x="60" y="840" class="section-label">图例 / Legend:</text>
+
+  <!-- NVLink solid line -->
+  <line x1="160" y1="848" x2="200" y2="848" stroke="#76b900" stroke-width="3"/>
+  <text x="208" y="852" class="legend-label">NVLink 4.0（GPU↔NVSwitch，900 GB/s总带宽）</text>
+
+  <!-- NVLink dashed line -->
+  <line x1="160" y1="866" x2="200" y2="866" stroke="#76b900" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="208" y="870" class="legend-label">NVLink 4.0（GPU 4-7，虚线仅为区分）</text>
+
+  <!-- PCIe line -->
+  <line x1="500" y1="848" x2="540" y2="848" stroke="#0066cc" stroke-width="2" stroke-dasharray="6,4"/>
+  <text x="548" y="852" class="legend-label">PCIe Gen5 x16（GPU↔CPU，64 GB/s）</text>
+
+  <!-- NIC line -->
+  <line x1="500" y1="866" x2="540" y2="866" stroke="#8b2fc9" stroke-width="2"/>
+  <text x="548" y="870" class="legend-label">PCIe（NIC↔GPU，400G × 8 = 3.2 Tb/s 总）</text>
+
+  <!-- Total bandwidth note -->
+  <text x="900" y="848" text-anchor="middle" class="legend-label" font-weight="bold">全系统 NVLink 带宽: 3.6 TB/s</text>
+  <text x="900" y="866" text-anchor="middle" class="legend-label">FP8 算力: 32 × 8 = 3,958 TOPS</text>
+
+  <!-- Watermark -->
+  <text x="600" y="895" text-anchor="middle" font-size="10" fill="#aaa">NVIDIA DGX H100 — Reference Architecture — 2026</text>
+</svg>
