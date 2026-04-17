@@ -1484,7 +1484,7 @@ std::cout<<"333333333"<<std::endl;
     rem->SetRandomVariable(uv);
     uv->SetStream(50);
     rem->SetAttribute("ErrorRate", DoubleValue(error_rate_per_link));
-    rem->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_PACKET"));
+    rem->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_BIT"));
 
     pfc_file = fopen(pfc_output_file.c_str(), "w");
 
@@ -1514,10 +1514,13 @@ std::cout<<"333333333"<<std::endl;
         qbb.SetChannelAttribute("Delay", StringValue(link_delay));
 
         if (error_rate > 0) {
-            Ptr<GilbertElliottErrorModel> gem = CreateObject<GilbertElliottErrorModel>();
-            gem->SetParameters(error_rate, 10.0);
-            gem->SetStream(current_stream_idx++);
-            qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(gem));
+            Ptr<RateErrorModel> link_rem = CreateObject<RateErrorModel>();
+            Ptr<UniformRandomVariable> link_uv = CreateObject<UniformRandomVariable>();
+            link_uv->SetStream(current_stream_idx++);
+            link_rem->SetRandomVariable(link_uv);
+            link_rem->SetAttribute("ErrorRate", DoubleValue(error_rate));
+            link_rem->SetAttribute("ErrorUnit", StringValue("ERROR_UNIT_BIT"));
+            qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(link_rem));
         } else {
             qbb.SetDeviceAttribute("ReceiveErrorModel", PointerValue(rem));
         }
@@ -2134,9 +2137,7 @@ std::cout<<"333333333"<<std::endl;
     /*-----------------------------------------------------------------------------*/
     /*----- we don't need below. Just we can enforce to close this simulation. -----*/
     /*-----------------------------------------------------------------------------*/
-    Simulator::Destroy();
-    NS_LOG_INFO("Total number of packets: " << RdmaHw::nAllPkts);
-    NS_LOG_INFO("Done.");
+    // NVL72大规模拓扑下Destroy()耗时极长，直接强制退出
     endt = clock();
     std::cerr << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
 }
