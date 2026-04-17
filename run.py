@@ -145,12 +145,22 @@ topo2bdp = {
     "H100_8_0.001_OS2":   _H100_BDP,
     
     # NVL72 base + per-error-rate variants
-    "NVL72_72_800G_OS2":  _NVL72_BDP,
-    "NVL72_0.00001_OS2":  _NVL72_BDP,
-    "NVL72_0.00005_OS2":  _NVL72_BDP,
-    "NVL72_0.0001_OS2":   _NVL72_BDP,
-    "NVL72_0.0005_OS2":   _NVL72_BDP,
-    "NVL72_0.001_OS2":    _NVL72_BDP,
+    "NVL72_72_800G_OS2":              _NVL72_BDP,
+    "NVL72_0.00001_OS2":              _NVL72_BDP,
+    "NVL72_0.00005_OS2":              _NVL72_BDP,
+    "NVL72_0.0001_OS2":               _NVL72_BDP,
+    "NVL72_0.0005_OS2":               _NVL72_BDP,
+    "NVL72_0.001_OS2":                _NVL72_BDP,
+    "NVL72_0.000001_OS2":             _NVL72_BDP,
+    "NVL72_0.0000001_OS2":            _NVL72_BDP,
+    "NVL72_0.00000001_OS2":           _NVL72_BDP,
+    "NVL72_0.000000001_OS2":          _NVL72_BDP,
+    "NVL72_0.0000000001_OS2":         _NVL72_BDP,
+    "NVL72_0.00000000001_OS2":        _NVL72_BDP,
+    "NVL72_0.000000000001_OS2":       _NVL72_BDP,
+    "NVL72_0.0000000000001_OS2":      _NVL72_BDP,
+    "NVL72_0.00000000000001_OS2":     _NVL72_BDP,
+    "NVL72_0.000000000000001_OS2":    _NVL72_BDP,
 }
 
 # 链路层 SR+CBFC 参数 (按拓扑自动选择)
@@ -172,12 +182,22 @@ topo2linklayer = {
     "H100_8_0.001_OS2":   _H100_LL,
     "H100_8_0.005_OS2":   _H100_LL,
     # NVL72 base + per-error-rate variants
-    "NVL72_72_800G_OS2":  _NVL72_LL,
-    "NVL72_0.00001_OS2":  _NVL72_LL,
-    "NVL72_0.00005_OS2":  _NVL72_LL,
-    "NVL72_0.0001_OS2":   _NVL72_LL,
-    "NVL72_0.0005_OS2":   _NVL72_LL,
-    "NVL72_0.001_OS2":    _NVL72_LL,
+    "NVL72_72_800G_OS2":              _NVL72_LL,
+    "NVL72_0.00001_OS2":              _NVL72_LL,
+    "NVL72_0.00005_OS2":              _NVL72_LL,
+    "NVL72_0.0001_OS2":               _NVL72_LL,
+    "NVL72_0.0005_OS2":               _NVL72_LL,
+    "NVL72_0.001_OS2":                _NVL72_LL,
+    "NVL72_0.000001_OS2":             _NVL72_LL,
+    "NVL72_0.0000001_OS2":            _NVL72_LL,
+    "NVL72_0.00000001_OS2":           _NVL72_LL,
+    "NVL72_0.000000001_OS2":          _NVL72_LL,
+    "NVL72_0.0000000001_OS2":         _NVL72_LL,
+    "NVL72_0.00000000001_OS2":        _NVL72_LL,
+    "NVL72_0.000000000001_OS2":       _NVL72_LL,
+    "NVL72_0.0000000000001_OS2":      _NVL72_LL,
+    "NVL72_0.00000000000001_OS2":     _NVL72_LL,
+    "NVL72_0.000000000000001_OS2":    _NVL72_LL,
 }
 
 FLOWGEN_DEFAULT_TIME = 2.0  # see /traffic_gen/traffic_gen.py::base_t
@@ -435,6 +455,11 @@ def main():
     credit_init = ll_params["credit_init"]
     rto_us = ll_params["rto_us"]
     mmu_global_alpha = args.alpha
+    # 允许命令行覆盖默认值（用于缓冲区大小对比实验）
+    if args.pool > 0:
+        mmu_pool_size = args.pool
+    if args.credit > 0:
+        credit_init = args.credit
     print("Link-layer params: pool={}, minG={}, credit={}, rto={}us, alpha={}".format(
         mmu_pool_size, mmu_min_guarantee, credit_init, rto_us, mmu_global_alpha))
 
