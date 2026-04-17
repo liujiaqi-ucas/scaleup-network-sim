@@ -5,7 +5,6 @@
 #   sr  → 在 feature/dynamic-alpha 分支运行
 #   gbn → 在 feature/cbfc-gbn 分支运行
 # ==============================================================
-set -e
 cd "$(dirname "$0")/.."
 
 PROTOCOL=${1:?用法: bash experiments_nvl72/run_nvl72.sh <sr|gbn>}

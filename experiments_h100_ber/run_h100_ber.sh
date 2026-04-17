@@ -6,7 +6,6 @@
 #   sr  → feature/dynamic-alpha 分支
 #   gbn → feature/cbfc-gbn 分支
 # ==============================================================
-set -e
 cd "$(dirname "$0")/.."
 
 PROTOCOL=${1:?用法: bash experiments_h100_ber/run_h100_ber.sh <sr|gbn>}
