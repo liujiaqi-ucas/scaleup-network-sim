@@ -954,117 +954,39 @@ void QbbNetDevice::DequeueAndTransmit(void) {
        // 场景 2: Switch (交换机) - 【融合流控版】
        // =========================================================
     else {
-        //第一优先级就是nak
-        if(nakflag){
-            Ptr<Packet> p = Create<Packet>(0);
-            NackHeader nh;
-            nh.SetFirstMissing(nakseq);
-            nh.SetBitmap(nakbitmapHigh, nakbitmapLow); // 改为128位
-            p->AddHeader(nh);
-            CommonHeader co;
-            co.SetFlitType(FLIT_TYPE_NACK);
-            p->AddHeader(co);
-            nakflag = false;
-            TransmitStart(p);
-            return;
-        }
-
-    // =================================================================
-    //第二优先级是重传包
-    //重传包已经是成品（有 SeqNum），不需要再 Check 信用
-    // =================================================================
-    // 第二优先级是重传包 (统一使用 m_retransQueue)
-      while (!m_retransQueue.empty()) {
-          uint16_t sn = m_retransQueue.front();
-          m_retransQueue.pop_front();
-
-          if (m_slidingWindow.empty()) continue;
-          uint16_t windowBase = m_slidingWindow.front().seqNum;
-
-          // 回绕安全检查：sn 是否已经被累计确认掉了
-          int16_t dist = (int16_t)(sn - windowBase);
-          if (dist < 0) {
-              continue;  // 已被 ACK，历史幽灵包
-          }
-
-          int16_t offset = (int16_t)(sn - windowBase);
-          if (offset >= 0 && offset < (int)m_slidingWindow.size()) {
-              auto& meta = m_slidingWindow[offset];
-
-              if (meta.isAcked) {
-                  meta.isRetransmitting = false;
-                  continue;
-              }
-
-              meta.isRetransmitting = false;
-              meta.sendTime = Simulator::Now();
-
-              // 统一取包接口
-              Ptr<Packet> flit = GetFlitFromWindow(sn);
-              if (flit) {
-                  // 通知 MMU：该槽位正在重传（供 dynamic-α 追踪重传率）
-                  if (m_mmu && meta.physicalIndex >= 0)
-                      m_mmu->MarkAsSent(meta.physicalIndex, m_portId);
-                  TransmitStart(flit->Copy());
-                  UpdateRtoTimer();
-                  return;
-              }
-          }
-      }
-    
-        
-    // =================================================================
-    // 第三优先级是从转发队列取新包
-    // =================================================================
+    // =========================================================
+    // Switch 侧 (E2E 模式): 透明转发，不重传，不发 NAK
+    // =========================================================
+    // 唯一优先级：从转发队列取包转发，转发后立即释放 MMU
     int16_t remaining = (int16_t)(m_txLimit - m_txTotalSent);
-    if (!m_txQueue.empty() && remaining > 0) {// 先检查转发队列里有没有包，如果有包了再检查信用够不够
-        m_txTotalSent += 1; // 先预占一个信用位，允许这个包发出去了，剩下的信用就少了一个了
-        // 从正常队列里拿出来的，是纯粹的物理下标
+    if (!m_txQueue.empty() && remaining > 0) {
+        m_txTotalSent += 1;
         int physicalIndex = m_txQueue.front();
         m_txQueue.pop();
 
-        // 去 MMU 提货
         Ptr<Packet> flit = m_mmu->ReadFlit(physicalIndex);
-
         CommonHeader common;
-      common.SetFlitType(FLIT_TYPE_DATA);
-      FlitHeader fh;
-      flit->RemoveHeader(fh);
-      // E2E 和链路层模式都需要分配本地 seq_num，保证目的端 RxBuffer 能按序重排
-      fh.SetSeqNum(m_next_seq_num);
-      flit->AddHeader(fh);
-      flit->AddHeader(common);
-      PiggybackAck(flit);
-      piggycredit(flit);
-      m_snifferTrace(flit);
-      m_promiscSnifferTrace(flit);
-      FlowIdTag t;
-      flit->RemovePacketTag(t);
-      TransmitStart(flit->Copy());
+        common.SetFlitType(FLIT_TYPE_DATA);
+        FlitHeader fh;
+        flit->RemoveHeader(fh);
+        fh.SetSeqNum(m_next_seq_num); // 本端口 seq，目的端 RxBuffer 按此排序
+        flit->AddHeader(fh);
+        flit->AddHeader(common);
+        PiggybackAck(flit);
+        piggycredit(flit);
+        m_snifferTrace(flit);
+        m_promiscSnifferTrace(flit);
+        FlowIdTag t;
+        flit->RemovePacketTag(t);
+        TransmitStart(flit->Copy());
 
-      if (Settings::e2e_retransmit) {
-          // E2E 模式：转发后立即释放 MMU，不加 slidingWindow，不启动 RTO
-          m_next_seq_num++;
-          m_mmu->FreeSpace(physicalIndex, m_portId);
-          m_switchNode->NotifySpaceAvailable();
-      } else {
-          // 链路层 SR：加入重传账本（先记录当前 seq，再递增）
-          FlitMeta meta;
-          meta.seqNum = m_next_seq_num; // 记录发出时的 seq
-          m_next_seq_num++;             // 再递增
-          meta.physicalIndex = physicalIndex;
-          meta.localCopy = nullptr;
-          meta.isAcked = false;
-          meta.isRetransmitting = false;
-          meta.retryCount = 0;
-          meta.sendTime = Simulator::Now();
-          m_slidingWindow.push_back(meta);
-          // m_next_seq_num++ 已在上方统一递增
-          UpdateRtoTimer();
-      }
-      return;
+        // E2E: 转发即释放，不等 ACK，不维护 slidingWindow
+        m_next_seq_num++;
+        m_mmu->FreeSpace(physicalIndex, m_portId);
+        m_switchNode->NotifySpaceAvailable();
+        return;
     }
-    generteStandaloneControl();//如果重传包和转发队列都没有数据的话，就单独检查一下有没有单独发送nak或者credie的需求
+    generteStandaloneControl();
     return;
 }
 }
@@ -1233,11 +1155,12 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     CommonHeader co;
     packet->RemoveHeader(co);
     int cotype=co.GetFlitType();
-    if(cotype==1){//链路层 NAK
-        // E2E 模式下交换机忽略本地 NAK（不参与重传）
-        if (Settings::e2e_retransmit && m_node->GetNodeType() > 0) {
+    if(cotype==1){// NAK
+        // Switch 在 E2E 模式下不参与重传，忽略来自上游的 NAK
+        if (m_node->GetNodeType() > 0) {
             return;
         }
+        // NIC 侧：正常处理 NAK（端侧重传）
         NackHeader nak;
         packet->PeekHeader(nak);
         uint16_t firstMissing = nak.GetFirstMissing();
@@ -1384,10 +1307,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         //uint64_t bitmapHigh, bitmapLow;
         //m_rxBuffer->GenerateNackBitmap(m_rxBuffer->GetHead(), bitmapHigh, bitmapLow);
         
-        // E2E 模式：交换机不发 NAK，源端依赖 RTO 重传
-        if (!Settings::e2e_retransmit) {
-            TriggerNak(0, m_rxBuffer->GetHead());
-        }
+        // Switch 透明转发，不发 NAK（源端依赖 RTO 重传）
     }
     m_rxNext=m_rxBuffer->GetHead();
 
