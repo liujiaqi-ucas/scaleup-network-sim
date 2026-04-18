@@ -1,0 +1,485 @@
+
+[1/120] gbn | allreduce | 1mb | BER=0.000000000000001
+grep: mix/output/545961363/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[2/120] gbn | alltoall | 1mb | BER=0.000000000000001
+grep: mix/output/627809560/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[3/120] gbn | allreduce | 4mb | BER=0.000000000000001
+grep: mix/output/190120803/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[4/120] gbn | alltoall | 4mb | BER=0.000000000000001
+grep: mix/output/961221112/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[5/120] gbn | allreduce | 16mb | BER=0.000000000000001
+grep: mix/output/792440239/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[6/120] gbn | alltoall | 16mb | BER=0.000000000000001
+grep: mix/output/510112684/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[7/120] gbn | allreduce | 64mb | BER=0.000000000000001
+grep: mix/output/108864880/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[8/120] gbn | alltoall | 64mb | BER=0.000000000000001
+grep: mix/output/605732154/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[9/120] gbn | allreduce | 128mb | BER=0.000000000000001
+grep: mix/output/873106637/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[10/120] gbn | alltoall | 128mb | BER=0.000000000000001
+grep: mix/output/508985434/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[11/120] gbn | allreduce | 256mb | BER=0.000000000000001
+grep: mix/output/57913386/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[12/120] gbn | alltoall | 256mb | BER=0.000000000000001
+grep: mix/output/504050387/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[13/120] gbn | allreduce | 1mb | BER=0.00000000000001
+grep: mix/output/151221293/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[14/120] gbn | alltoall | 1mb | BER=0.00000000000001
+grep: mix/output/412950798/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[15/120] gbn | allreduce | 4mb | BER=0.00000000000001
+grep: mix/output/492659130/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[16/120] gbn | alltoall | 4mb | BER=0.00000000000001
+grep: mix/output/474125539/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[17/120] gbn | allreduce | 16mb | BER=0.00000000000001
+grep: mix/output/442011231/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[18/120] gbn | alltoall | 16mb | BER=0.00000000000001
+grep: mix/output/695089912/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[19/120] gbn | allreduce | 64mb | BER=0.00000000000001
+grep: mix/output/276926322/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[20/120] gbn | alltoall | 64mb | BER=0.00000000000001
+grep: mix/output/746394514/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[21/120] gbn | allreduce | 128mb | BER=0.00000000000001
+grep: mix/output/456354955/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[22/120] gbn | alltoall | 128mb | BER=0.00000000000001
+grep: mix/output/704008980/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[23/120] gbn | allreduce | 256mb | BER=0.00000000000001
+grep: mix/output/296573847/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[24/120] gbn | alltoall | 256mb | BER=0.00000000000001
+grep: mix/output/775715126/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[25/120] gbn | allreduce | 1mb | BER=0.0000000000001
+grep: mix/output/833245105/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[26/120] gbn | alltoall | 1mb | BER=0.0000000000001
+grep: mix/output/910332398/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[27/120] gbn | allreduce | 4mb | BER=0.0000000000001
+grep: mix/output/712197308/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[28/120] gbn | alltoall | 4mb | BER=0.0000000000001
+grep: mix/output/505833054/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[29/120] gbn | allreduce | 16mb | BER=0.0000000000001
+grep: mix/output/411623819/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[30/120] gbn | alltoall | 16mb | BER=0.0000000000001
+grep: mix/output/999162475/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[31/120] gbn | allreduce | 64mb | BER=0.0000000000001
+grep: mix/output/88756272/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[32/120] gbn | alltoall | 64mb | BER=0.0000000000001
+grep: mix/output/16802543/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[33/120] gbn | allreduce | 128mb | BER=0.0000000000001
+grep: mix/output/99790751/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[34/120] gbn | alltoall | 128mb | BER=0.0000000000001
+grep: mix/output/124703757/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[35/120] gbn | allreduce | 256mb | BER=0.0000000000001
+grep: mix/output/330723322/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[36/120] gbn | alltoall | 256mb | BER=0.0000000000001
+grep: mix/output/520485962/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[37/120] gbn | allreduce | 1mb | BER=0.000000000001
+grep: mix/output/743995869/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[38/120] gbn | alltoall | 1mb | BER=0.000000000001
+grep: mix/output/225247456/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[39/120] gbn | allreduce | 4mb | BER=0.000000000001
+grep: mix/output/439535002/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[40/120] gbn | alltoall | 4mb | BER=0.000000000001
+grep: mix/output/638781008/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[41/120] gbn | allreduce | 16mb | BER=0.000000000001
+grep: mix/output/822613806/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[42/120] gbn | alltoall | 16mb | BER=0.000000000001
+grep: mix/output/719826889/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[43/120] gbn | allreduce | 64mb | BER=0.000000000001
+grep: mix/output/318185306/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[44/120] gbn | alltoall | 64mb | BER=0.000000000001
+grep: mix/output/124486184/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[45/120] gbn | allreduce | 128mb | BER=0.000000000001
+grep: mix/output/614646817/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[46/120] gbn | alltoall | 128mb | BER=0.000000000001
+grep: mix/output/823486896/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[47/120] gbn | allreduce | 256mb | BER=0.000000000001
+grep: mix/output/585805297/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[48/120] gbn | alltoall | 256mb | BER=0.000000000001
+grep: mix/output/831112613/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[49/120] gbn | allreduce | 1mb | BER=0.00000000001
+grep: mix/output/752602792/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[50/120] gbn | alltoall | 1mb | BER=0.00000000001
+grep: mix/output/397800802/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[51/120] gbn | allreduce | 4mb | BER=0.00000000001
+grep: mix/output/771064100/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[52/120] gbn | alltoall | 4mb | BER=0.00000000001
+grep: mix/output/62226266/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[53/120] gbn | allreduce | 16mb | BER=0.00000000001
+grep: mix/output/564392487/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[54/120] gbn | alltoall | 16mb | BER=0.00000000001
+grep: mix/output/930496274/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[55/120] gbn | allreduce | 64mb | BER=0.00000000001
+grep: mix/output/770433247/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[56/120] gbn | alltoall | 64mb | BER=0.00000000001
+grep: mix/output/284798008/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[57/120] gbn | allreduce | 128mb | BER=0.00000000001
+grep: mix/output/494412835/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[58/120] gbn | alltoall | 128mb | BER=0.00000000001
+grep: mix/output/947844242/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[59/120] gbn | allreduce | 256mb | BER=0.00000000001
+grep: mix/output/201349690/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[60/120] gbn | alltoall | 256mb | BER=0.00000000001
+grep: mix/output/493836510/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[61/120] gbn | allreduce | 1mb | BER=0.0000000001
+grep: mix/output/866171058/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[62/120] gbn | alltoall | 1mb | BER=0.0000000001
+grep: mix/output/572367624/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[63/120] gbn | allreduce | 4mb | BER=0.0000000001
+grep: mix/output/15156071/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[64/120] gbn | alltoall | 4mb | BER=0.0000000001
+grep: mix/output/384878670/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[65/120] gbn | allreduce | 16mb | BER=0.0000000001
+grep: mix/output/162685958/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[66/120] gbn | alltoall | 16mb | BER=0.0000000001
+grep: mix/output/700211041/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[67/120] gbn | allreduce | 64mb | BER=0.0000000001
+grep: mix/output/241960818/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[68/120] gbn | alltoall | 64mb | BER=0.0000000001
+grep: mix/output/592087949/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[69/120] gbn | allreduce | 128mb | BER=0.0000000001
+grep: mix/output/645304019/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[70/120] gbn | alltoall | 128mb | BER=0.0000000001
+grep: mix/output/343612800/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[71/120] gbn | allreduce | 256mb | BER=0.0000000001
+grep: mix/output/750790123/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[72/120] gbn | alltoall | 256mb | BER=0.0000000001
+grep: mix/output/684906065/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[73/120] gbn | allreduce | 1mb | BER=0.000000001
+grep: mix/output/611224042/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[74/120] gbn | alltoall | 1mb | BER=0.000000001
+grep: mix/output/236922046/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[75/120] gbn | allreduce | 4mb | BER=0.000000001
+grep: mix/output/617866413/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[76/120] gbn | alltoall | 4mb | BER=0.000000001
+grep: mix/output/897462124/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[77/120] gbn | allreduce | 16mb | BER=0.000000001
+grep: mix/output/347312608/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[78/120] gbn | alltoall | 16mb | BER=0.000000001
+grep: mix/output/467744420/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[79/120] gbn | allreduce | 64mb | BER=0.000000001
+grep: mix/output/192412545/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[80/120] gbn | alltoall | 64mb | BER=0.000000001
+grep: mix/output/162040340/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[81/120] gbn | allreduce | 128mb | BER=0.000000001
+grep: mix/output/241010501/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[82/120] gbn | alltoall | 128mb | BER=0.000000001
+grep: mix/output/888288719/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[83/120] gbn | allreduce | 256mb | BER=0.000000001
+grep: mix/output/541809673/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[84/120] gbn | alltoall | 256mb | BER=0.000000001
+grep: mix/output/618694589/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[85/120] gbn | allreduce | 1mb | BER=0.00000001
+grep: mix/output/521571489/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[86/120] gbn | alltoall | 1mb | BER=0.00000001
+grep: mix/output/368501407/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[87/120] gbn | allreduce | 4mb | BER=0.00000001
+grep: mix/output/285083058/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[88/120] gbn | alltoall | 4mb | BER=0.00000001
+grep: mix/output/576127813/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[89/120] gbn | allreduce | 16mb | BER=0.00000001
+grep: mix/output/872552949/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[90/120] gbn | alltoall | 16mb | BER=0.00000001
+grep: mix/output/561457744/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[91/120] gbn | allreduce | 64mb | BER=0.00000001
+grep: mix/output/662741375/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[92/120] gbn | alltoall | 64mb | BER=0.00000001
+grep: mix/output/803038443/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[93/120] gbn | allreduce | 128mb | BER=0.00000001
+grep: mix/output/293085548/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[94/120] gbn | alltoall | 128mb | BER=0.00000001
+grep: mix/output/804444643/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[95/120] gbn | allreduce | 256mb | BER=0.00000001
+grep: mix/output/882037149/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[96/120] gbn | alltoall | 256mb | BER=0.00000001
+grep: mix/output/426160916/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[97/120] gbn | allreduce | 1mb | BER=0.0000001
+grep: mix/output/187778429/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[98/120] gbn | alltoall | 1mb | BER=0.0000001
+grep: mix/output/679675333/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[99/120] gbn | allreduce | 4mb | BER=0.0000001
+grep: mix/output/904756453/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[100/120] gbn | alltoall | 4mb | BER=0.0000001
+grep: mix/output/850845121/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[101/120] gbn | allreduce | 16mb | BER=0.0000001
+grep: mix/output/182031840/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[102/120] gbn | alltoall | 16mb | BER=0.0000001
+grep: mix/output/609288255/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[103/120] gbn | allreduce | 64mb | BER=0.0000001
+grep: mix/output/415010324/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[104/120] gbn | alltoall | 64mb | BER=0.0000001
+grep: mix/output/487682307/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[105/120] gbn | allreduce | 128mb | BER=0.0000001
+grep: mix/output/929491939/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[106/120] gbn | alltoall | 128mb | BER=0.0000001
+grep: mix/output/915393980/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[107/120] gbn | allreduce | 256mb | BER=0.0000001
+grep: mix/output/162139401/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[108/120] gbn | alltoall | 256mb | BER=0.0000001
+grep: mix/output/731840499/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+[109/120] gbn | allreduce | 1mb | BER=0.000001
+grep: mix/output/748029458/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_1mb.txt 实际=
+
+[110/120] gbn | alltoall | 1mb | BER=0.000001
+grep: mix/output/941427854/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_1mb.txt 实际=
+
+[111/120] gbn | allreduce | 4mb | BER=0.000001
+grep: mix/output/166782344/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_4mb.txt 实际=
+
+[112/120] gbn | alltoall | 4mb | BER=0.000001
+grep: mix/output/126642438/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_4mb.txt 实际=
+
+[113/120] gbn | allreduce | 16mb | BER=0.000001
+grep: mix/output/917192524/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_16mb.txt 实际=
+
+[114/120] gbn | alltoall | 16mb | BER=0.000001
+grep: mix/output/298779467/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_16mb.txt 实际=
+
+[115/120] gbn | allreduce | 64mb | BER=0.000001
+grep: mix/output/346348596/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_64mb.txt 实际=
+
+[116/120] gbn | alltoall | 64mb | BER=0.000001
+grep: mix/output/270347275/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_64mb.txt 实际=
+
+[117/120] gbn | allreduce | 128mb | BER=0.000001
+grep: mix/output/648728771/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_128mb.txt 实际=
+
+[118/120] gbn | alltoall | 128mb | BER=0.000001
+grep: mix/output/472998358/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_128mb.txt 实际=
+
+[119/120] gbn | allreduce | 256mb | BER=0.000001
+grep: mix/output/816010111/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_allreduce_8gpu_256mb.txt 实际=
+
+[120/120] gbn | alltoall | 256mb | BER=0.000001
+grep: mix/output/15195036/config.txt: No such file or directory
+  FAIL: flow不匹配! 期望=config/flow_alltoall_8gpu_256mb.txt 实际=
+
+============================================
+gbn: 120 完成, 120 失败
+结果: experiments_h100_ber/gbn/results.csv
+============================================
