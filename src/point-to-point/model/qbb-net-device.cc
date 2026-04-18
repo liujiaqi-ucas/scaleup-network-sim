@@ -1027,42 +1027,41 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         Ptr<Packet> flit = m_mmu->ReadFlit(physicalIndex);
 
         CommonHeader common;
-      common.SetFlitType(FLIT_TYPE_DATA);//0代表数据flit
+      common.SetFlitType(FLIT_TYPE_DATA);
       FlitHeader fh;
-      flit->RemoveHeader(fh);           // 1. 取下旧头 (端侧的或上一跳的)
-      fh.SetSeqNum(m_next_seq_num);  // 2. 更新为本端口的发送序号
-      //m_next_seq_num++;              // 3. 指针自增
-      flit->AddHeader(fh);              // 4. 装回新头
+      flit->RemoveHeader(fh);
+      // E2E 和链路层模式都需要分配本地 seq_num，保证目的端 RxBuffer 能按序重排
+      fh.SetSeqNum(m_next_seq_num);
+      flit->AddHeader(fh);
       flit->AddHeader(common);
-      // 捎带 ACK 和 Credit（转发包顺路带回本端收到的流控信息）
       PiggybackAck(flit);
       piggycredit(flit);
-      //做一些统计
       m_snifferTrace(flit);
       m_promiscSnifferTrace(flit);
       FlowIdTag t;
-      //uint32_t qIndex = m_queue->GetLastQueue();    
-      //m_node->SwitchNotifyDequeue(m_ifIndex, qIndex, p);
       flit->RemovePacketTag(t);
-      //m_traceDequeue(p, qIndex);
-        // 调用底层物理发送（必须用Copy()，避免Channel传给接收端的是同一个Ptr<Packet>对象，
-      // 接收端RemoveHeader会破坏MMU里存的原始flit，导致重传时包头丢失）
-        TransmitStart(flit->Copy());
+      TransmitStart(flit->Copy());
 
-        // 【状态转移】：发送完毕，绝不释放 MMU，而是将它转入重传账本！
-        FlitMeta meta;
+      m_next_seq_num++; // 两种模式都需要递增（目的端 RxBuffer 需要单调递增的 seq）
+      if (Settings::e2e_retransmit) {
+          // E2E 模式：转发后立即释放 MMU，不加 slidingWindow，不启动 RTO
+          m_mmu->FreeSpace(physicalIndex, m_portId);
+          m_switchNode->NotifySpaceAvailable();
+      } else {
+          // 链路层 SR：加入重传账本
+          FlitMeta meta;
           meta.seqNum = m_next_seq_num;
-          meta.physicalIndex = physicalIndex;                                                                                                                                 
-          meta.localCopy = nullptr;  // 交换机侧不用本地副本
-          meta.isAcked = false;                                                                                                                                               
-          meta.isRetransmitting = false;                                                                                                                                      
-          meta.retryCount = 0;          
-          meta.sendTime = Simulator::Now();                                                                                                                                   
-                                           
+          meta.physicalIndex = physicalIndex;
+          meta.localCopy = nullptr;
+          meta.isAcked = false;
+          meta.isRetransmitting = false;
+          meta.retryCount = 0;
+          meta.sendTime = Simulator::Now();
           m_slidingWindow.push_back(meta);
-        m_next_seq_num++;
-        UpdateRtoTimer();  // ← 新增
-        return; // 物理发送完成，退出
+          // m_next_seq_num++ 已在上方统一递增
+          UpdateRtoTimer();
+      }
+      return;
     }
     generteStandaloneControl();//如果重传包和转发队列都没有数据的话，就单独检查一下有没有单独发送nak或者credie的需求
     return;
@@ -1233,24 +1232,42 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     CommonHeader co;
     packet->RemoveHeader(co);
     int cotype=co.GetFlitType();
-    if(cotype==1){//代表这是一个nak的flit
-       
+    if(cotype==1){//链路层 NAK
+        // E2E 模式下交换机忽略本地 NAK（不参与重传）
+        if (Settings::e2e_retransmit && m_node->GetNodeType() > 0) {
+            return;
+        }
         NackHeader nak;
         packet->PeekHeader(nak);
         uint16_t firstMissing = nak.GetFirstMissing();
-        uint64_t bitmapHigh   = nak.GetBitmapHigh(); // 改为128位
+        uint64_t bitmapHigh   = nak.GetBitmapHigh();
         uint64_t bitmapLow    = nak.GetBitmapLow();
-        //std::cout << "Node  " << m_node->GetId() << " device " << m_ifIndex
-                  //<< "收到nak了，firstMissing是" << firstMissing;
-        //PrintBitmap(bitmapHigh, bitmapLow);
-        
         HandleBitmapNAK(firstMissing, bitmapLow, bitmapHigh);
-        //std::cout<<"处理完nak之后的重传缓冲区状态"<<std::endl;
-        //m_replayBuffer->PrintBuffer(m_node->GetId(), m_ifIndex);
-        DequeueAndTransmit(); // 处理完 NAK 后，尝试发送重传包或新包
+        DequeueAndTransmit();
         return;
     }
-    //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到一个flit了，不是nak，准备处理这个flit"<<std::endl;
+    // E2E NAK（FLIT_TYPE_E2E_NACK=5）：源端 NIC 处理，交换机转发
+    if (cotype == FLIT_TYPE_E2E_NACK) {
+        if (m_node->GetNodeType() == 0) {
+            NackHeader nak;
+            packet->PeekHeader(nak);
+            HandleBitmapNAK(nak.GetFirstMissing(), nak.GetBitmapLow(), nak.GetBitmapHigh());
+            DequeueAndTransmit();
+            return;
+        }
+        // 交换机：当普通数据 flit 继续走（不 return，让后续代码正常处理路由转发）
+    }
+    // E2E ACK（FLIT_TYPE_E2E_ACK=6）：源端 NIC 推进滑动窗口，交换机转发
+    if (cotype == FLIT_TYPE_E2E_ACK) {
+        if (m_node->GetNodeType() == 0) {
+            NackHeader ack; // 复用 NackHeader，firstMissing 字段存 ackSeq
+            packet->PeekHeader(ack);
+            HandleCumulativeACK(ack.GetFirstMissing());
+            return;
+        }
+        // 交换机：继续走普通数据路径转发
+    }
+    //下面就代表的是一个数据flit，可能有流控和ack捎带
     //下面就代表的是一个数据flit，可能有流控和ack捎带
     int packetsize=packet->GetSize();
     m_macRxTrace(packet);
@@ -1366,11 +1383,14 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
         //uint64_t bitmapHigh, bitmapLow;
         //m_rxBuffer->GenerateNackBitmap(m_rxBuffer->GetHead(), bitmapHigh, bitmapLow);
         
-        TriggerNak(0, m_rxBuffer->GetHead());
+        // E2E 模式：交换机不发 NAK，源端依赖 RTO 重传
+        if (!Settings::e2e_retransmit) {
+            TriggerNak(0, m_rxBuffer->GetHead());
+        }
     }
-    m_rxNext=m_rxBuffer->GetHead(); // 更新 m_rxNext 到当前连续包的下一个位置
-        
-        DequeueAndTransmit(); // 处理完 ACK/NACK 后，尝试发送重传包或新包
+    m_rxNext=m_rxBuffer->GetHead();
+
+        DequeueAndTransmit();
         return; // 交换机逻辑结束
     }
 

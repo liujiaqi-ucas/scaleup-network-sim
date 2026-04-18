@@ -137,6 +137,9 @@ class Settings {
 
     static uint32_t dropped_pkt_sw_ingress;
     static uint32_t dropped_pkt_sw_egress;
+
+    // E2E 端侧重传模式 (true = E2E SR, false = 链路层 SR)
+    static bool e2e_retransmit;
 };
 
 }  // namespace ns3

@@ -87,6 +87,7 @@ uint32_t mmu_pool_size = 4096;    // 交换机 MMU 总池大小 (flit 数)
 uint32_t mmu_min_guarantee = 64;  // 每端口保底额度 (flit 数)
 uint32_t credit_init = 256;       // 初始信用 = RxBuffer 容量 (flit 数)
 uint32_t rto_us = 500;            // RTO 超时值 (微秒) — 从20us增大以减少RTO风暴事件数
+bool e2e_retransmit = false;      // E2E 端侧重传模式 (false=链路层SR, true=E2E SR)
 double mmu_global_alpha = 0.5;    // 全局固定 α 值
 double pause_time = 5;  // PFC pause, microseconds
 double flowgen_start_time = 2.0, flowgen_stop_time = 2.5, simulator_extra_time = 0.1;
@@ -1302,6 +1303,12 @@ int main(int argc, char *argv[]) {
                 conf >> v;
                 mmu_global_alpha = v;
                 std::cerr << "MMU_GLOBAL_ALPHA\t\t\t" << mmu_global_alpha << "\n";
+            } else if (key.compare("E2E_RETRANSMIT") == 0) {
+                uint32_t v;
+                conf >> v;
+                e2e_retransmit = (v != 0);
+                Settings::e2e_retransmit = e2e_retransmit;
+                std::cerr << "E2E_RETRANSMIT\t\t\t" << (e2e_retransmit ? "Yes" : "No") << "\n";
             }
 
             fflush(stdout);
@@ -1337,7 +1344,11 @@ int main(int argc, char *argv[]) {
     Config::SetDefault("ns3::QbbNetDevice::DynamicThreshold", BooleanValue(dynamicth));
     Config::SetDefault("ns3::QbbNetDevice::QbbEnabled", BooleanValue(enable_pfc));
     Config::SetDefault("ns3::QbbNetDevice::CreditInit", UintegerValue(credit_init));
-    Config::SetDefault("ns3::QbbNetDevice::RtoValue", TimeValue(MicroSeconds(rto_us)));
+    // E2E 模式：NIC RTO 需要覆盖 E2E RTT（链路层 2 跳 × 2 向 = 4×hop_delay + 处理延迟）
+    uint32_t nic_rto_us = e2e_retransmit ? (rto_us * 4) : rto_us;
+    Config::SetDefault("ns3::QbbNetDevice::RtoValue", TimeValue(MicroSeconds(nic_rto_us)));
+    std::cerr << "NIC RTO\t\t\t\t" << nic_rto_us << " us"
+              << (e2e_retransmit ? " (E2E mode, 4x link-layer RTO)" : " (link-layer mode)") << "\n";
 
     if (cc_mode != 1 && lb_mode == 9) {
         std::cout << "Currently, ConWeave supports only DCQCN congestion control for RDMA. \nIf "
@@ -1546,6 +1557,18 @@ std::cout<<"333333333"<<std::endl;
         // 在属性系统设置完成后，初始化 credit 相关状态（用 m_creditInit 覆盖构造函数硬编码的 256）
         DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
         DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
+        // E2E 模式：只在 NIC→Switch 方向施加错误（switch 接收端）
+        // Switch→NIC 方向无错误（NIC 接收端清空 error model）
+        // 这样 switch 收到的错误靠 source RTO 恢复，不需要交换机重传
+        if (e2e_retransmit && error_rate > 0) {
+            if (snode->GetNodeType() == 0) {
+                // snode=NIC, dnode=Switch: d.Get(0)=NIC receive from Switch → 清空
+                DynamicCast<QbbNetDevice>(d.Get(0))->SetReceiveErrorModel(nullptr);
+            } else {
+                // snode=Switch, dnode=NIC: d.Get(1)=NIC receive from Switch → 清空
+                DynamicCast<QbbNetDevice>(d.Get(1))->SetReceiveErrorModel(nullptr);
+            }
+        }
         if (snode->GetNodeType() == 0) {
             Ptr<Ipv4> ipv4 = snode->GetObject<Ipv4>();
             ipv4->AddInterface(d.Get(0));

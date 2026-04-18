@@ -96,6 +96,7 @@ MMU_MIN_GUARANTEE {mmu_min_guarantee}
 CREDIT_INIT {credit_init}
 RTO_US {rto_us}
 MMU_GLOBAL_ALPHA {mmu_global_alpha}
+E2E_RETRANSMIT {e2e_retransmit}
 """
 
 
@@ -221,6 +222,8 @@ def main():
                          type=int, default=0, help="enable PFC (default: 1)")
     parser.add_argument('--irn', dest='irn', action='store',
                          type=int, default=0, help="enable IRN (default: 0)")
+    parser.add_argument('--e2e', dest='e2e', action='store',
+                         type=int, default=0, help="enable E2E end-to-end retransmit (default: 0)")
     parser.add_argument('--simul_time', dest='simul_time', action='store',
                         default='0.1', help="traffic time to simulate (up to 3 seconds) (default: 0.1)")
     parser.add_argument('--buffer', dest="buffer", action='store',
@@ -273,6 +276,7 @@ def main():
     lb_mode = lb_modes[args.lb]
     enabled_pfc = int(args.pfc)
     enabled_irn = int(args.irn)
+    e2e_retransmit = int(args.e2e)
     bw = int(args.bw)
     buffer = args.buffer
     topo = args.topo
@@ -515,7 +519,8 @@ def main():
                                         kmax_map=kmax_map, kmin_map=kmin_map, pmax_map=pmax_map,
                                         mmu_pool_size=mmu_pool_size, mmu_min_guarantee=mmu_min_guarantee,
                                         credit_init=credit_init, rto_us=rto_us,
-                                        mmu_global_alpha=mmu_global_alpha)
+                                        mmu_global_alpha=mmu_global_alpha,
+                                        e2e_retransmit=e2e_retransmit)
     with open(config_name, "w") as file:
         file.write(config)
     # run program

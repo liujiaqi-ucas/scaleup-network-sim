@@ -14,7 +14,10 @@ enum FlitType {
   FLIT_TYPE_DATA   = 0, // 数据 Flit
   FLIT_TYPE_NACK   = 1, // NACK 控制 Flit
   FLIT_TYPE_ACK    = 2, // 累积 ACK (可选)
-  FLIT_TYPE_CREDIT = 3  // 流控 Credit (可选)
+  FLIT_TYPE_CREDIT = 3, // 流控 Credit (可选)
+  FLIT_TYPE_PFC    = 4, // PFC PAUSE/RESUME
+  FLIT_TYPE_E2E_NACK = 5, // 端侧 E2E 选择重传 NAK（IP 路由，经交换机转发到源端）
+  FLIT_TYPE_E2E_ACK  = 6  // 端侧 E2E 累积 ACK（IP 路由，经交换机转发到源端）
 };
 
 /**
