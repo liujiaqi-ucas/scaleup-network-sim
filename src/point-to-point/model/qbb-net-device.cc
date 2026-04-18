@@ -1042,15 +1042,16 @@ void QbbNetDevice::DequeueAndTransmit(void) {
       flit->RemovePacketTag(t);
       TransmitStart(flit->Copy());
 
-      m_next_seq_num++; // 两种模式都需要递增（目的端 RxBuffer 需要单调递增的 seq）
       if (Settings::e2e_retransmit) {
           // E2E 模式：转发后立即释放 MMU，不加 slidingWindow，不启动 RTO
+          m_next_seq_num++;
           m_mmu->FreeSpace(physicalIndex, m_portId);
           m_switchNode->NotifySpaceAvailable();
       } else {
-          // 链路层 SR：加入重传账本
+          // 链路层 SR：加入重传账本（先记录当前 seq，再递增）
           FlitMeta meta;
-          meta.seqNum = m_next_seq_num;
+          meta.seqNum = m_next_seq_num; // 记录发出时的 seq
+          m_next_seq_num++;             // 再递增
           meta.physicalIndex = physicalIndex;
           meta.localCopy = nullptr;
           meta.isAcked = false;
