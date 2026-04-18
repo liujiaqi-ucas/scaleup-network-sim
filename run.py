@@ -119,7 +119,7 @@ lb_modes = {
 _H100_BDP = 10000   # 800Gbps * 2 * 100ns / 8 = 10KB
 _NVL72_BDP = 10000  # 400Gbps * 2 * 100ns / 8 = 10KB
 _H100_LL  = {"mmu_pool_size": 4096, "mmu_min_guarantee": 32, "credit_init": 128, "rto_us": 50}  
-_NVL72_LL = {"mmu_pool_size": 16384, "mmu_min_guarantee": 16, "credit_init": 64, "rto_us": 10}
+_NVL72_LL = {"mmu_pool_size": 16384, "mmu_min_guarantee": 32, "credit_init": 64, "rto_us": 10}
 
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,
@@ -144,6 +144,7 @@ topo2bdp = {
     "H100_8_0.0005_OS2":  _H100_BDP,
     "H100_8_0.001_OS2":   _H100_BDP,
     
+    "H100_8_hetero_OS2":  _H100_BDP,
     # NVL72 base + per-error-rate variants
     "NVL72_72_800G_OS2":              _NVL72_BDP,
     "NVL72_0.00001_OS2":              _NVL72_BDP,
@@ -181,6 +182,7 @@ topo2linklayer = {
     "H100_8_0.0005_OS2":  _H100_LL,
     "H100_8_0.001_OS2":   _H100_LL,
     "H100_8_0.005_OS2":   _H100_LL,
+    "H100_8_hetero_OS2":  _H100_LL,
     # NVL72 base + per-error-rate variants
     "NVL72_72_800G_OS2":              _NVL72_LL,
     "NVL72_0.00001_OS2":              _NVL72_LL,
@@ -239,6 +241,10 @@ def main():
                         type=int, default=10000, help="interval of sampling statistics for queue status (default: 10000ns)")
     parser.add_argument('--alpha', dest='alpha', action='store',
                         type=float, default=0.5, help="全局固定 MMU DT alpha 值 (default: 0.5)")
+    parser.add_argument('--pool', dest='pool', action='store',
+                        type=int, default=-1, help="覆盖 mmu_pool_size (flit数, -1表示用拓扑默认值)")
+    parser.add_argument('--credit', dest='credit', action='store',
+                        type=int, default=-1, help="覆盖 credit_init (flit数, -1表示用拓扑默认值)")
     print("77777777")
     # #### CONWEAVE PARAMETERS ####
     # parser.add_argument('--cwh_extra_reply_deadline', dest='cwh_extra_reply_deadline', action='store',
@@ -555,8 +561,10 @@ def main():
     # 直接调用新脚本，传入 ID 即可
     # 注意：确保 analyze_scaleup.py 在当前目录下
     analyze_cmd = "python3 analyze_scaleup.py -id {config_ID} -fdir mix".format(config_ID=config_ID)
-    
-    os.system(analyze_cmd)
+
+    # NVL72大规模实验跳过分析，避免IO卡死
+    if '72' not in topo:
+        os.system(analyze_cmd)
     # -----------------------------------------------------------
     if lb_mode == 9: # ConWeave Logging
         ################################################################
