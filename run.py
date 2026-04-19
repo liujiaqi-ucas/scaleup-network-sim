@@ -118,8 +118,8 @@ lb_modes = {
 
 _H100_BDP = 10000   # 800Gbps * 2 * 100ns / 8 = 10KB
 _NVL72_BDP = 10000  # 400Gbps * 2 * 100ns / 8 = 10KB
-_H100_LL  = {"mmu_pool_size": 3072, "mmu_min_guarantee": 32, "credit_init": 128, "rto_us": 50}  # 分离方案: 总预算4096, pool=3072, replay=128/端口
-_NVL72_LL = {"mmu_pool_size": 131072, "mmu_min_guarantee": 32, "credit_init": 4096, "rto_us": 10}
+_H100_LL  = {"mmu_pool_size": 4416, "mmu_min_guarantee": 32, "credit_init": 128, "rto_us": 50}  # 分离方案 +25%: pool=4416, replay=128/端口, 总=6720 flit (vs 统一架构 5376)
+_NVL72_LL = {"mmu_pool_size": 21920, "mmu_min_guarantee": 32, "credit_init": 64, "rto_us": 10}  # 分离方案 +25%: pool=21920, replay=64/端口, 总=27680 flit (vs 统一架构 22144)
 
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,
