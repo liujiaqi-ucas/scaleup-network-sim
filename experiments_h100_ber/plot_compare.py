@@ -16,7 +16,7 @@ OUT_DIR    = os.path.join(SCRIPT_DIR, "plots")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 BER_VALS = [1e-15, 1e-14, 1e-13, 1e-12, 1e-11,
-            1e-10,  1e-9,  1e-8,  1e-7,  1e-6]
+            1e-10,  1e-9,  1e-8,  1e-7,  1e-6,  1e-5]
 MSG_SIZES   = ["1mb","4mb","16mb","64mb","128mb","256mb"]
 SIZE_LABELS = ["1 MB","4 MB","16 MB","64 MB","128 MB","256 MB"]
 TRAFFICS    = ["allreduce","alltoall"]
