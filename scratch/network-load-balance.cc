@@ -2146,5 +2146,6 @@ std::cout<<"333333333"<<std::endl;
     // NVL72大规模拓扑下Destroy()耗时极长，直接强制退出
     endt = clock();
     std::cerr << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
+    std::cerr << "[RETRANS] total_retrans=" << QbbNetDevice::g_totalRetrans << "\n";
     exit(0);  // 跳过Simulator::Destroy()，避免大规模拓扑长时间阻塞
 }

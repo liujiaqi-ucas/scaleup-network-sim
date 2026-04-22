@@ -66,6 +66,7 @@ extern std::unordered_map<unsigned, Time> acc_pause_time;
 
 // uint32_t RdmaEgressQueue::ack_q_idx = 3; // 3: Middle priority
 uint32_t RdmaEgressQueue::ack_q_idx = 0;  // 0: high priority
+uint64_t QbbNetDevice::g_totalRetrans = 0;
 // RdmaEgressQueue
 TypeId RdmaEgressQueue::GetTypeId(void) {
     static TypeId tid =
@@ -847,6 +848,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
           // 从统一接口取包
           Ptr<Packet> retransPkt = GetFlitFromWindow(sn);
           if (retransPkt) {
+              g_totalRetrans++;
               TransmitStart(retransPkt->Copy());
               UpdateRtoTimer();  // ← 新增：sendTime 已更新，重新校准定时器
           }
@@ -1001,6 +1003,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
                   // 通知 MMU：该槽位正在重传（供 dynamic-α 追踪重传率）
                   if (m_mmu && meta.physicalIndex >= 0)
                       m_mmu->MarkAsSent(meta.physicalIndex, m_portId);
+                  g_totalRetrans++;
                   TransmitStart(flit->Copy());
                   UpdateRtoTimer();
                   return;
