@@ -116,7 +116,8 @@ public:
   static const uint32_t qCnt = 8;	// Number of queues/priorities used
   static const uint32_t pCnt = 128;	// Number of ports used
   static const uint32_t fCnt = 128; // Max number of flows on a NIC, for TX and RX respectively. TX+RX=fCnt*2
-  static const uint32_t maxHop = 1; // Max hop count in the network. should not exceed 16 
+  static const uint32_t maxHop = 1; // Max hop count in the network. should not exceed 16
+  static uint64_t g_totalRetrans;   // 全局重传计数器（所有设备累计）
 
  //作为向下游的发送端需要维护的变量
   std::queue<int> m_txQueue;           // 正常发送队列 (只存物理下标)
