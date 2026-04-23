@@ -27,7 +27,10 @@ SIZE_COLORS = ["#1976D2","#388E3C","#F57C00","#D32F2F","#7B1FA2","#00838F"]
 
 
 def load_csv(path, proto_override=None):
-    """加载 CSV，返回 dict: (traffic, msgsize, ber) -> {mean, p99, jct}"""
+    """加载 CSV，兼容两种格式：
+      旧格式(9列): proto,traffic,size,ber,nflow,biterr,mean,p99,jct
+      新格式(10列): proto,traffic,size,ber,nflow,biterr,retrans,mean,p99,jct
+    """
     data = {}
     if not os.path.exists(path):
         return data
@@ -40,10 +43,12 @@ def load_csv(path, proto_override=None):
                 traffic = p[1]
                 msgsize = p[2]
                 ber     = float(p[3])
+                # 10列新格式有retrans列，mean/p99/jct后移一位
+                off = 1 if len(p) >= 10 else 0
                 data[(traffic, msgsize, ber)] = {
-                    'mean': float(p[6]),
-                    'p99':  float(p[7]),
-                    'jct':  float(p[8]),
+                    'mean': float(p[6 + off]),
+                    'p99':  float(p[7 + off]),
+                    'jct':  float(p[8 + off]),
                 }
             except Exception:
                 pass
