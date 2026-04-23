@@ -109,21 +109,19 @@ for MSGSIZE in $MSG_SIZES; do
 
     NUM_FLOWS=$(wc -l < "$FCT")
     NUM_ERRORS=$(grep -c "发生了错误" "$LOG" 2>/dev/null || echo 0)
-    NUM_RETRANS=$(grep -oP '(?<=\[RETRANS\] total_retrans=)\d+' "$LOG" 2>/dev/null | tail -1)
-    NUM_RETRANS=${NUM_RETRANS:-0}
 
     awk '{print $7}' "$FCT" | sort -n | awk \
       -v pr="$PROTOCOL" -v tr="$TRAFFIC" -v ms="$MSGSIZE" \
-      -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" -v retrans="$NUM_RETRANS" \
+      -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" \
       'BEGIN{s=0;n=0}
        {a[n]=$1; s+=$1; n++}
        END{
          avg=s/n/1000; p99=a[int(n*0.99)]/1000; jct=a[n-1]/1000;
-         printf "%s,%s,%s,%s,%d,%d,%d,%.2f,%.2f,%.2f\n",
-           pr,tr,ms,er,fl,errs,retrans,avg,p99,jct
+         printf "%s,%s,%s,%s,%d,%d,%.2f,%.2f,%.2f\n",
+           pr,tr,ms,er,fl,errs,avg,p99,jct
        }' >> "$CSV"
 
-    echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} retrans=${NUM_RETRANS} ✓"
+    echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} ✓"
   done
 done
 
