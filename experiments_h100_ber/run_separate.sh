@@ -2,7 +2,8 @@
 # ==============================================================
 # 分离架构 H100_8 BER 实验 (feature/separate-replay 分支)
 # 6消息大小 × 2流量类型 × 10 BER错误率 = 120 组
-# 存储配置: pool=4416, replay=128/端口, 总=6720 flit (+25% vs 统一架构)
+# 存储配置: pool=6144/switch + replay=256×8端口=2048/switch → 总8192/switch
+#           统一架构 pool=6144/switch → 总6144/switch (少25%)
 # 用法: bash experiments_h100_ber/run_separate.sh
 # ==============================================================
 cd "$(dirname "$0")/.."
@@ -11,18 +12,18 @@ OUTDIR="experiments_h100_ber/separate"
 mkdir -p "$OUTDIR"
 CSV="${OUTDIR}/results.csv"
 
-# 10 个 BER 错误率 (1e-15 ~ 1e-6)
+# 10 个 BER 错误率 (高→低)
 BER_RATES="
-0.000000000000001
-0.00000000000001
-0.0000000000001
-0.000000000001
-0.00000000001
-0.0000000001
-0.000000001
-0.00000001
-0.0000001
 0.000001
+0.0000001
+0.00000001
+0.000000001
+0.0000000001
+0.00000000001
+0.000000000001
+0.0000000000001
+0.00000000000001
+0.000000000000001
 "
 
 MSG_SIZES="1mb 4mb 16mb 64mb 128mb 256mb"
@@ -68,7 +69,7 @@ for ERRRATE in $BER_RATES; do
       echo "[${done_count}/${total}] separate | ${TRAFFIC} | ${MSGSIZE} | BER=${ERRRATE}"
 
       TMPLOG=$(mktemp /tmp/sim_XXXXXX.log)
-      python3 run.py --topo "$TOPO" --flow "$FLOW" --simul_time "$SIMTIME" > "$TMPLOG" 2>&1
+      python3 run.py --topo "$TOPO" --flow "$FLOW" --simul_time "$SIMTIME" --pool 6144 --credit 256 > "$TMPLOG" 2>&1
 
       CONFIG_ID=$(grep -oP '(?<=/output/)\d{7,12}(?=/)' "$TMPLOG" | tail -1)
       rm -f "$TMPLOG"
