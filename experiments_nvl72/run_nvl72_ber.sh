@@ -28,18 +28,20 @@ echo "结果: $CSV"
 echo ""
 
 # ── 实验参数 ──────────────────────────────────────────────────
+# 存储配置: pool=18432/switch + rxBuf 72×128=9216/switch → 统一27648, 分离36864 (差25%)
+# credit=128: 适配 NVL72 400Gbps 链路
 BER_RATES="
-0.000000000000001
-0.00000000000001
-0.0000000000001
-0.000000000001
-0.00000000001
-0.0000000001
-0.000000001
-0.00000001
-0.0000001
-0.000001
 0.00001
+0.000001
+0.0000001
+0.00000001
+0.000000001
+0.0000000001
+0.00000000001
+0.000000000001
+0.0000000000001
+0.00000000000001
+0.000000000000001
 "
 MSG_SIZES="16mb 64mb"
 TRAFFIC="alltoall"
@@ -77,7 +79,7 @@ for MSGSIZE in $MSG_SIZES; do
 
     TMPLOG=$(mktemp /tmp/sim_XXXXXX.log)
     python3 run.py --topo "$TOPO" --flow "$FLOW" \
-                   --simul_time "$SIMTIME" $PFC_FLAG > "$TMPLOG" 2>&1
+                   --simul_time "$SIMTIME" --pool 18432 --credit 128 $PFC_FLAG > "$TMPLOG" 2>&1
 
     CONFIG_ID=$(grep -oP '(?<=/output/)\d{7,12}(?=/)' "$TMPLOG" | tail -1)
     rm -f "$TMPLOG"
@@ -107,19 +109,21 @@ for MSGSIZE in $MSG_SIZES; do
 
     NUM_FLOWS=$(wc -l < "$FCT")
     NUM_ERRORS=$(grep -c "发生了错误" "$LOG" 2>/dev/null || echo 0)
+    NUM_RETRANS=$(grep -oP '(?<=\[RETRANS\] total_retrans=)\d+' "$LOG" 2>/dev/null | tail -1)
+    NUM_RETRANS=${NUM_RETRANS:-0}
 
     awk '{print $7}' "$FCT" | sort -n | awk \
       -v pr="$PROTOCOL" -v tr="$TRAFFIC" -v ms="$MSGSIZE" \
-      -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" \
+      -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" -v retrans="$NUM_RETRANS" \
       'BEGIN{s=0;n=0}
        {a[n]=$1; s+=$1; n++}
        END{
          avg=s/n/1000; p99=a[int(n*0.99)]/1000; jct=a[n-1]/1000;
-         printf "%s,%s,%s,%s,%d,%d,%.2f,%.2f,%.2f\n",
-           pr,tr,ms,er,fl,errs,avg,p99,jct
+         printf "%s,%s,%s,%s,%d,%d,%d,%.2f,%.2f,%.2f\n",
+           pr,tr,ms,er,fl,errs,retrans,avg,p99,jct
        }' >> "$CSV"
 
-    echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} ✓"
+    echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} retrans=${NUM_RETRANS} ✓"
   done
 done
 
