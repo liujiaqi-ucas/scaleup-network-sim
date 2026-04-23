@@ -79,7 +79,7 @@ for MSGSIZE in $MSG_SIZES; do
 
     TMPLOG=$(mktemp /tmp/sim_XXXXXX.log)
     python3 run.py --topo "$TOPO" --flow "$FLOW" \
-                   --simul_time "$SIMTIME" $PFC_FLAG > "$TMPLOG" 2>&1
+                   --simul_time "$SIMTIME" --pool 18432 --credit 128 $PFC_FLAG > "$TMPLOG" 2>&1
 
     CONFIG_ID=$(grep -oP '(?<=/output/)\d{7,12}(?=/)' "$TMPLOG" | tail -1)
     rm -f "$TMPLOG"
