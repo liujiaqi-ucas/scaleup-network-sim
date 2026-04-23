@@ -6,16 +6,15 @@
 # ==============================================================
 cd "$(dirname "$0")/.."
 
-# ── 自动从分支名推断协议 ───────────────────────────────────────
-BRANCH=$(git branch --show-current 2>/dev/null)
-case "$BRANCH" in
-  *dynamic-alpha*)  PROTOCOL="sr"       ; PFC_FLAG="" ;;
-  *cbfc-gbn*)       PROTOCOL="gbn"      ; PFC_FLAG="" ;;
-  *pfc-support*)    PROTOCOL="pfc"      ; PFC_FLAG="--pfc 1" ;;
-  *separate-replay*)PROTOCOL="separate" ; PFC_FLAG="" ;;
+PROTOCOL=${1:?用法: bash experiments_nvl72/run_nvl72_ber.sh <sr|gbn|pfc|separate>}
+
+case "$PROTOCOL" in
+  sr)       PFC_FLAG="" ;;
+  gbn)      PFC_FLAG="" ;;
+  pfc)      PFC_FLAG="--pfc 1" ;;
+  separate) PFC_FLAG="" ;;
   *)
-    echo "ERROR: 无法从分支名推断协议，当前分支: $BRANCH"
-    echo "支持的分支: dynamic-alpha / cbfc-gbn / pfc-support / separate-replay"
+    echo "ERROR: 不支持的协议 '$PROTOCOL'，可选: sr / gbn / pfc / separate"
     exit 1
     ;;
 esac
@@ -79,7 +78,7 @@ for MSGSIZE in $MSG_SIZES; do
 
     TMPLOG=$(mktemp /tmp/sim_XXXXXX.log)
     python3 run.py --topo "$TOPO" --flow "$FLOW" \
-                   --simul_time "$SIMTIME" $PFC_FLAG > "$TMPLOG" 2>&1
+                   --simul_time "$SIMTIME" --pool 18432 --credit 128 $PFC_FLAG > "$TMPLOG" 2>&1
 
     CONFIG_ID=$(grep -oP '(?<=/output/)\d{7,12}(?=/)' "$TMPLOG" | tail -1)
     rm -f "$TMPLOG"
