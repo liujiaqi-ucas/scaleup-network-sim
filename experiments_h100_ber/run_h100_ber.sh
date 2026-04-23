@@ -71,7 +71,7 @@ for ERRRATE in $BER_RATES; do
       echo "[${done_count}/${total}] ${PROTOCOL} | ${TRAFFIC} | ${MSGSIZE} | BER=${ERRRATE}"
 
       TMPLOG=$(mktemp /tmp/sim_XXXXXX.log)
-      python3 run.py --topo "$TOPO" --flow "$FLOW" --simul_time "$SIMTIME" --pool 6144 --credit 256 > "$TMPLOG" 2>&1
+      python3 run.py --topo "$TOPO" --flow "$FLOW" --simul_time "$SIMTIME" --pool 4096 --credit 256 > "$TMPLOG" 2>&1
 
       CONFIG_ID=$(grep -oP '(?<=/output/)\d{7,12}(?=/)' "$TMPLOG" | tail -1)
       rm -f "$TMPLOG"

@@ -273,7 +273,7 @@ void QbbNetDevice::InitCredit() {
     // 25% 余量补偿信用更新的流水线延迟，避免发送端因等待信用而空转。
     // 关键：RxBuffer 的物理容量必须 >= m_bufferSize，否则 StorePacket 会因
     // distFromHead >= m_size 而静默丢包，产生不必要的 NAK 和重传。
-    m_bufferSize = m_creditInit + m_creditInit / 4;
+    m_bufferSize = m_creditInit ;
     m_txLimit = (uint16_t)m_creditInit;
     m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);  // 用 m_bufferSize 而非 m_creditInit
 }
