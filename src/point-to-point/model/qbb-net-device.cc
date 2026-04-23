@@ -282,16 +282,12 @@ QbbNetDevice::QbbNetDevice() {
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
 
 void QbbNetDevice::InitCredit() {
-    // 在属性系统完成设置后调用（即 qbb.Install() 之后），
-    // 用 m_creditInit 覆盖构造函数中硬编码的 256。
-    // 25% 余量补偿信用更新的流水线延迟，避免发送端因等待信用而空转。
-    // 关键：RxBuffer 的物理容量必须 >= m_bufferSize，否则 StorePacket 会因
-    // distFromHead >= m_size 而静默丢包，产生不必要的 NAK 和重传。
-    m_bufferSize = m_creditInit + m_creditInit / 4;
-    m_txLimit = (uint16_t)m_creditInit;
-    m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);  // 用 m_bufferSize 而非 m_creditInit
-    // PFC 模式: 不用信用限制（PAUSE 帧控制流量，slidingWindow 有安全帽保护）
+    // rxBuffer 用于 SR 重传机制的乱序缓冲，PFC 和 CBFC 都需要
+    m_bufferSize = m_creditInit;
+    m_txLimit    = (uint16_t)m_creditInit;
+    m_rxBuffer   = Create<RxBuffer>((uint16_t)m_creditInit);
     if (m_qbbEnabled) {
+        // PFC 模式：流控由 PAUSE 帧负责，不受信用限制
         m_txLimit = 0xFFFF;
     }
 }
@@ -677,8 +673,12 @@ void QbbNetDevice::TriggerNak(uint8_t vc_id, uint16_t seq) {
     // }
     nakflag = true;
     nakseq = seq;
-    // 改为生成128位位图
-    m_rxBuffer->GenerateNackBitmap(nakseq, nakbitmapHigh, nakbitmapLow);
+    if (m_rxBuffer) {
+        m_rxBuffer->GenerateNackBitmap(nakseq, nakbitmapHigh, nakbitmapLow);
+    } else {
+        nakbitmapHigh = 0;
+        nakbitmapLow  = 0;
+    }
 
     //std::cout << "Node " << m_node->GetId() << "的device" << m_ifIndex
               //<< "发现乱序了，执行triggernak函数，此时nakseq是" << seq;
@@ -1385,136 +1385,75 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     // 分支 A: 交换机逻辑 (Switch)
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-    if (m_node->GetNodeType() > 0) { 
-        
+    // 分支 A: 交换机逻辑 (Switch)
+    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    if (m_node->GetNodeType() > 0) {
+
         // 1. 安检 (Validity Check)
-        uint16_t dist = seq - m_rxNext ;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包的seq是"<<seq<<"，目前期待的seq是"<<m_rxNext<<"，距离是"<<dist<<std::endl;
+        uint16_t dist = seq - m_rxNext;
         if (dist >= MAX_SN / 2) {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
             TriggerAck(0, m_rxNext);
-            return;} // 过期
-        if (dist >= m_bufferSize)
-        {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
-            return; // 溢出
-            }
-        if (m_rxBuffer->IsReceived(seq))
-        {   //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
+            return; // 过期
+        }
+        if (dist >= m_bufferSize) return; // 溢出
+        if (m_rxBuffer->IsReceived(seq)) {
             TriggerAck(0, m_rxNext);
             return; // 重复
-            }
-
+        }
 
         // 2. 入库 (Store)
-        // 交换机后续转发需要完整的包，所以先把头加回去
         packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
-        // PFC 由 SwitchNode egress 管理
-        // 无脑尝试提取连续包 (解耦的神来之笔)
         std::vector<Ptr<Packet>> readyPackets;
         uint32_t extractedCount = m_rxBuffer->CommitContiguous(readyPackets);
-
         for (uint32_t i = 0; i < extractedCount; i++) {
-        m_readyQueue.push(readyPackets[i]);
+            m_readyQueue.push(readyPackets[i]);
         }
         if (extractedCount > 0) {
-        // 【情况 A：按序到达 或 重传填坑成功】
-        // 只要拔出来了哪怕 1 个包，说明 m_head 绝对往前走了！
-        // 直接根据最新的 m_head 发送累计确认。
-        //SendCumulativeAck(m_rxBuffer->GetHead() - 1);
-        TriggerAck(0, m_rxBuffer->GetHead());
-        
-        // 既然有新包进入了 m_readyQueue，尝试向交换机内部转发
-        TryForwardingRxBuffer(); 
-    } 
-    else {
-        // 【情况 B：乱序到达】
-        // 存入成功了，但是拔出来的包是 0 个！
-        // 这说明什么？说明刚才存的包在 m_head 后面，是个乱序包！
-        // m_head 根本没动，前面肯定有个大坑！直接触发位图 NAK！
-        //uint64_t bitmapHigh, bitmapLow;
-        //m_rxBuffer->GenerateNackBitmap(m_rxBuffer->GetHead(), bitmapHigh, bitmapLow);
-        
-        TriggerNak(0, m_rxBuffer->GetHead());
-    }
-    m_rxNext=m_rxBuffer->GetHead(); // 更新 m_rxNext 到当前连续包的下一个位置
-        
-        DequeueAndTransmit(); // 处理完 ACK/NACK 后，尝试发送重传包或新包
-        return; // 交换机逻辑结束
+            TriggerAck(0, m_rxBuffer->GetHead());
+            TryForwardingRxBuffer();
+        } else {
+            TriggerNak(0, m_rxBuffer->GetHead());
+        }
+        m_rxNext = m_rxBuffer->GetHead();
+        DequeueAndTransmit();
+        return;
     }
 
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     // 分支 B: 网卡逻辑 (NIC / End-Host)
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     else {
-        
-        // 1. 安检 (Validity Check)
-        // 1. 安检 (Validity Check)
+        // 1. 安检
         uint16_t dist = (seq - m_rxNext + MAX_SN) % MAX_SN;
-        //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到的包的seq是"<<seq<<"，目前期待的seq是"<<m_rxNext<<"，距离是"<<dist<<std::endl;
         if (dist >= MAX_SN / 2) {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到过期包了，seq是"<<seq<<std::endl;
             TriggerAck(0, m_rxNext);
-            return;} // 过期
-        if (dist >= m_bufferSize)
-        {
-            //std::cout<<"Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到超出窗口范围的包了，seq是"<<seq<<std::endl;
-            return; // 溢出
-            }
-        if (m_rxBuffer->IsReceived(seq))
-        {   //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到重复包了，seq是"<<seq<<std::endl;
+            return; // 过期
+        }
+        if (dist >= m_bufferSize) return; // 溢出
+        if (m_rxBuffer->IsReceived(seq)) {
             TriggerAck(0, m_rxNext);
             return; // 重复
-            }
+        }
 
-        // 2. 入库 (Store)
-        packet->AddHeader(fh); // 先加头
+        // 2. 入库 + 提交
+        packet->AddHeader(fh);
         m_rxBuffer->StorePacket(seq, packet);
-        // PFC 由 SwitchNode egress 管理
-        //m_rxBuffer->PrintDebugState(); // 打印 Buffer 状态，看看坑位和包的关系
-        // 3. 提交循环 (Commit Loop)
-        // 只有填坑成功才执行
         if (seq == m_rxNext) {
-            //std::cout << "[COMMIT] Node=" << m_node->GetId() << " Dev=" << m_ifIndex
-            //          << " seq=" << seq << " T=" << Simulator::Now().GetNanoSeconds() << "ns" << std::endl;
             int commitCount = 0;
-
-            // 循环处理 buffer 中所有连续的包
             while (m_rxBuffer->IsReceived(m_rxNext)) {
                 Ptr<Packet> p = m_rxBuffer->GetPacket(m_rxNext);
-                m_rdmaReceiveCb(p, ch,m_ifIndex);//把包交给上层，注意这里的回调函数是用户自己注册的，所以我不知道它会不会卡死回不来，如果卡死了那就说明上层处理不过来了，可能需要改成异步的回调机制了
-
-                // d. 【关键】清理 Buffer & 推进指针
-                // 网卡侧已经交付给上层了，必须立刻清理内存并释放空间
-                //m_rxBuffer->ClearEntry(m_rxNext);
+                m_rdmaReceiveCb(p, ch, m_ifIndex);
                 m_rxBuffer->CommitHead();
                 m_rxNext = (m_rxNext + 1) % MAX_SN;
-                
                 commitCount++;
             }
-            //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"向上层传递完数据之后，现在要打印rxbuffer状态了"<<std::endl;
-            //m_rxBuffer->PrintDebugState(); // 再次打印 Buffer 状态，看看提交后的变化
-            // 4. 批量反馈 (Feedback)
             if (commitCount > 0) {
-                // 发送 ACK
                 TriggerAck(0, m_rxNext);
-                
-                // 批量释放 Credit (因为我们刚刚 ClearEntry 了 commitCount 个包)
-                // 
-                
-                    ReleaseRxCredit(commitCount); // 替换为你实际的发送 Credit 函数
-                    // PFC 由 SwitchNode egress 管理
+                ReleaseRxCredit(commitCount);
             }
-
         } else {
-            //std::cout<<"端侧Node "<<m_node->GetId()<<" device "<<m_ifIndex<<"收到了一个乱序的flit，seq是"<<seq<<"，期望的seq是"<<m_rxNext<<"，我先把它存起来，等它变成期望的seq的时候再提交"<<std::endl;
-            // [乱序到达]
-            // 只存包，发 NACK，不提交
-            //if (CheckNackCooldown(m_rxNext)) {
-                TriggerNak(0, m_rxNext);
-                //m_lastNackTime = Simulator::Now();
-            //}
+            TriggerNak(0, m_rxNext);
         }
     }
     return;
