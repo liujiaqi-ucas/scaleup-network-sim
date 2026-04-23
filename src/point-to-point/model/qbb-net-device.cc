@@ -255,7 +255,7 @@ QbbNetDevice::QbbNetDevice() {
     nakseq = 0;//如果有nak要发，这个nak是针对哪个序号的
     nakbitmapHigh = 0;
     nakbitmapLow = 0;
-    m_rxBuffer = Create<RxBuffer>(256);//初始化构造rxbuffer，容量等于初始信用（单位是flit）
+    m_rxBuffer = Create<RxBuffer>(256+256/4);//初始化构造rxbuffer，容量等于初始信用（单位是flit）
     m_mmu = nullptr;//这里得看一下switchnode怎么赋值的
     m_switchNode = nullptr;//这里得看一下switchnode怎么赋值的
     m_portId = 0;
@@ -272,7 +272,7 @@ void QbbNetDevice::InitCredit() {
     // 用 m_creditInit 覆盖构造函数中硬编码的 256。
     m_bufferSize = m_creditInit + m_creditInit / 4;
     m_txLimit = (uint16_t)m_creditInit;
-    m_rxBuffer = Create<RxBuffer>((uint16_t)m_creditInit);
+    m_rxBuffer = Create<RxBuffer>((uint16_t)m_bufferSize);
 }
 
 void QbbNetDevice::UpdateRtoTimer() {
