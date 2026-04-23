@@ -256,9 +256,8 @@ QbbNetDevice::QbbNetDevice() {
 QbbNetDevice::~QbbNetDevice() { NS_LOG_FUNCTION(this); }
 
 void QbbNetDevice::InitCredit() {
-    // 在属性系统完成设置后调用（即 qbb.Install() 之后），
-    // 用 m_creditInit 覆盖构造函数中硬编码的 256。
-    m_bufferSize = m_creditInit + m_creditInit / 4;
+    // m_bufferSize = m_creditInit：rxBuffer 固定 256 flit，credit 上限与 rxBuffer 一致，不溢出
+    m_bufferSize = m_creditInit;
     m_txLimit = (uint16_t)m_creditInit;
     m_rxBuffer = Create<RxBuffer>((uint16_t)m_creditInit);
 }
