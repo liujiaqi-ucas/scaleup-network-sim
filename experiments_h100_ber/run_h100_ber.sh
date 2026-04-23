@@ -15,16 +15,16 @@ CSV="${OUTDIR}/results.csv"
 
 # 10 个 BER 错误率 (1e-15 ~ 1e-6)
 BER_RATES="
-0.000000000000001
-0.00000000000001
-0.0000000000001
-0.000000000001
-0.00000000001
-0.0000000001
-0.000000001
-0.00000001
-0.0000001
 0.000001
+0.0000001                                                                                                                              
+0.00000001                                                                                                                             
+0.000000001                                                                                                                            
+0.0000000001                                                                                                                           
+0.00000000001                                                                                                                          
+0.000000000001                                                                                                                         
+0.0000000000001                                                                                                                        
+0.00000000000001                                                                                                                       
+0.000000000000001  
 "
 
 MSG_SIZES="1mb 4mb 16mb 64mb 128mb 256mb"
@@ -102,21 +102,23 @@ for ERRRATE in $BER_RATES; do
 
       NUM_FLOWS=$(wc -l < "$FCT")
       NUM_ERRORS=$(grep -c "发生了错误" "$LOG" 2>/dev/null || echo 0)
+      NUM_RETRANS=$(grep -oP '(?<=\[RETRANS\] total_retrans=)\d+' "$LOG" 2>/dev/null | tail -1)
+      NUM_RETRANS=${NUM_RETRANS:-0}
 
       awk '{print $7}' "$FCT" | sort -n | awk \
         -v pr="$PROTOCOL" -v tr="$TRAFFIC" -v ms="$MSGSIZE" \
-        -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" \
+        -v er="$ERRRATE" -v fl="$NUM_FLOWS" -v errs="$NUM_ERRORS" -v retrans="$NUM_RETRANS" \
         'BEGIN{s=0;n=0}
          {a[n]=$1; s+=$1; n++}
          END{
            avg = s/n/1000;
            p99 = a[int(n*0.99)]/1000;
            jct = a[n-1]/1000;
-           printf "%s,%s,%s,%s,%d,%d,%.2f,%.2f,%.2f\n",
-             pr, tr, ms, er, fl, errs, avg, p99, jct
+           printf "%s,%s,%s,%s,%d,%d,%d,%.2f,%.2f,%.2f\n",
+             pr, tr, ms, er, fl, errs, retrans, avg, p99, jct
          }' >> "$CSV"
 
-      echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} ✓"
+      echo "  OK: id=${CONFIG_ID} flows=${NUM_FLOWS} errors=${NUM_ERRORS} retrans=${NUM_RETRANS} ✓"
     done
   done
 done
