@@ -1091,7 +1091,22 @@ void QbbNetDevice::HandleCumulativeACK(uint64_t ackSeq) {
       if (spaceFreed && m_switchNode) {
           m_switchNode->NotifySpaceAvailable();
       }
-      UpdateRtoTimer();  // ← 新增：窗口头部移动了，重新对准定时器
+
+      // SR 多重丢包快速恢复：ACK 推进窗口后，若新 HEAD 超龄（> RTO/30 ≈ 1.5×RTT），
+      // 说明接收端已在等待它，立即重传无需等待整个 RTO 超时。
+      if (!m_slidingWindow.empty()) {
+          auto& head = m_slidingWindow.front();
+          if (!head.isAcked && !head.isRetransmitting && head.retryCount == 0) {
+              Time threshold = Time(m_rtoValue.GetNanoSeconds() / 30);
+              if (Simulator::Now() - head.sendTime >= threshold) {
+                  head.retryCount++;
+                  head.isRetransmitting = true;
+                  m_retransQueue.push_back(head.seqNum);
+              }
+          }
+      }
+
+      UpdateRtoTimer();  // 窗口头部移动了，重新对准定时器
 }
 
 // =========================================================
@@ -1106,17 +1121,28 @@ void QbbNetDevice::HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_
       uint16_t windowBaseSeq = m_slidingWindow.front().seqNum;
 
       // ----- 步骤 1：处理首个丢失的包 (baseSeq 本身) -----
+      // 冷却机制：防止后续每个 NAK 都重复排队 baseSeq（isRetransmitting 在 TransmitStart
+      // 前清零，导致下一个 NAK 可以重入队，实际重传次数≈窗口大小而非1次）。
+      // RTO/30 ≈ 1.5×RTT，足以区分"刚重传完在途中"和"超时未到达"。
       int16_t baseOffset = (int16_t)(baseSeq - windowBaseSeq);
       if (baseOffset >= 0 && baseOffset < (int)m_slidingWindow.size()) {
           auto& lostPacket = m_slidingWindow[baseOffset];
           if (!lostPacket.isAcked && !lostPacket.isRetransmitting) {
-              lostPacket.retryCount++;
-              lostPacket.isRetransmitting = true;  // 防止重复入队
-              m_retransQueue.push_back(lostPacket.seqNum);  // 统一用 seqNum，不再用 physicalIndex
+              Time cooldown = Time(m_rtoValue.GetNanoSeconds() / 30);
+              bool isFirstRetrans = (lostPacket.retryCount == 0);
+              bool cooledDown    = (Simulator::Now() - lostPacket.sendTime >= cooldown);
+              if (isFirstRetrans || cooledDown) {
+                  lostPacket.retryCount++;
+                  lostPacket.isRetransmitting = true;
+                  m_retransQueue.push_back(lostPacket.seqNum);
+              }
           }
       }
 
       // ----- 步骤 2：解析 128 位位图 -----
+      // bit=1：对端已乱序收到 → 释放存储
+      // bit=0：不重传。NAK 在第一个乱序包到达时立即发出，此时后续 flit 尚在链路上，
+      //        bit=0 无法区分"真正丢失"和"还在途中"；真丢的 flit 会在后续 NAK 中成为新 baseSeq。
       for (int i = 0; i < 128; ++i) {
           uint16_t currentSeq = baseSeq + 1 + i;
           int16_t offset = (int16_t)(currentSeq - windowBaseSeq);
@@ -1127,26 +1153,13 @@ void QbbNetDevice::HandleBitmapNAK(uint64_t baseSeq, uint64_t bitmapLow, uint64_
           auto& targetPacket = m_slidingWindow[offset];
           if (targetPacket.isAcked) continue;
 
-          // 判断位图中第 i 位
-          bool isReceived = false;
-          if (i < 64) {
-              isReceived = (bitmapLow & (1ULL << i)) != 0;
-          } else {
-              isReceived = (bitmapHigh & (1ULL << (i - 64))) != 0;
-          }
-
+          bool isReceived = (i < 64) ? ((bitmapLow  >> i)       & 1)
+                                     : ((bitmapHigh >> (i - 64)) & 1);
           if (isReceived) {
-              // 对端已乱序收到 → 释放存储
               FreeFlitInWindow(targetPacket);
               spaceFreed = true;
-          } else {
-              // 对端确认丢失 → 加入重传队列
-              if (!targetPacket.isRetransmitting) {
-                  targetPacket.retryCount++;
-                  targetPacket.isRetransmitting = true;
-                  m_retransQueue.push_back(targetPacket.seqNum);  // 统一用 seqNum
-              }
           }
+          // bit=0：不重传
       }
 
       // 交换机侧特有
