@@ -1556,30 +1556,9 @@ std::cout<<"333333333"<<std::endl;
         // so that the global routing is based on our IP
         NetDeviceContainer d = qbb.Install(snode, dnode);
 
-        // PFC 模式：为交换机端口单独设置 CreditInit = headroom_per_port
-        // headroom = 2×单向传播时延×带宽/8 + 2×MTU，换算为 flit 数
-        // 这使得该端口的 RxBuffer = headroom（同时作为 SR 重排序缓冲和 PFC headroom），
-        // 与对端 NIC 的 256-flit RxBuffer 共同构成 4096+256×N=6144 的总存储预算。
-        if (enable_pfc) {
-            const uint32_t PFC_FLIT_PAYLOAD = 240;
-            const uint32_t PFC_MTU_BYTES    = 1392;
-            uint64_t bps_val = DynamicCast<QbbNetDevice>(d.Get(0))->GetDataRate().GetBitRate();
-            uint64_t dly_ns  = DynamicCast<QbbChannel>(
-                                   DynamicCast<QbbNetDevice>(d.Get(0))->GetChannel()
-                               )->GetDelay().GetNanoSeconds();
-            uint64_t hdrm_b = bps_val / 1000000000ULL * dly_ns / 8 * 2 + 2 * PFC_MTU_BYTES;
-            uint32_t hdrm_f = (uint32_t)((hdrm_b + PFC_FLIT_PAYLOAD - 1) / PFC_FLIT_PAYLOAD);
-
-            for (int side = 0; side < 2; side++) {
-                Ptr<Node> nd = (side == 0) ? snode : dnode;
-                if (nd->GetNodeType() > 0) {  // 交换机侧
-                    DynamicCast<QbbNetDevice>(d.Get(side))
-                        ->SetAttribute("CreditInit", UintegerValue(hdrm_f));
-                }
-            }
-        }
-
-        // 初始化 credit 状态（使用上面可能已覆盖的 CreditInit）
+        // 所有设备统一使用全局 CreditInit（256），不再为交换机端口单独覆盖。
+        // RxBuffer = 256 flits 保证 SR 重排序在高并发（112流）场景下足够使用。
+        // PFC headroom 由 MMU 内部 Phase-3 专用区域提供（switch-mmu.cc AllocateSpace）。
         DynamicCast<QbbNetDevice>(d.Get(0))->InitCredit();
         DynamicCast<QbbNetDevice>(d.Get(1))->InitCredit();
         if (snode->GetNodeType() == 0) {
@@ -1669,50 +1648,55 @@ std::cout<<"333333333"<<std::endl;
                 //sw->m_mmu->ConfigHdrm(j, headroom);
             }
             // -------------------------------------------------------
-            // 存储预算说明（与 CBFC 分支总量一致）：
-            //   CBFC 总量 = mmu_pool_size + credit_init × numPorts
-            //             = 4096 + 256×N = 6144（N=8）
-            //   PFC  总量 = ConfigPool 大小 + Σ(headroom_per_port_i)
-            //             = (6144 - headroom_total) + headroom_total = 6144
-            //
-            //   每个交换机端口的 CreditInit 已在链路安装时覆盖为 headroom_per_port，
-            //   因此 RxBuffer = headroom（同时充当 SR 重排序缓冲 + PFC headroom）。
-            //   ConfigPool 大小 = 6144 - headroom_total（共享转发池，不含 headroom）。
+            // 存储预算（与 CBFC 分支一致）：
+            //   总量 = mmu_pool_size(4096) + credit_init(256)×N = 6144（N=8）
+            //   MMU 物理池 = mmu_pool_size = 4096（不变）
+            //   RxBuffer/port = credit_init = 256（不变，保证高并发 SR 重排序）
+            //   Headroom      = 从 4096 内部 Phase-3 区域单独划出，不减少 RxBuffer
+            //     总量 = Σ(headroom_per_port)，共享池 = 4096 - headroom_total
             // -------------------------------------------------------
             {
                 uint32_t numPorts = sw->GetNDevices() - 1;
                 if (numPorts == 0) numPorts = 1;
 
-                // 读出每个端口实际设置的 headroom（链路安装时已覆盖 CreditInit）
+                // 计算每端口 headroom（2×单向时延×带宽/8 + 2×MTU，换算为 flit）
+                const uint32_t FLIT_PAYLOAD = 240;
+                const uint32_t MTU_BYTES    = 1392;
                 uint32_t headroomTotal = 0;
+
                 for (uint32_t j = 1; j < sw->GetNDevices(); j++) {
                     Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(sw->GetDevice(j));
                     if (!dev) continue;
-                    uint32_t h = dev->GetCreditInit();
-                    sw->m_mmu->ConfigPortHeadroom(j, h);
-                    headroomTotal += h;
+                    Ptr<QbbChannel> ch = DynamicCast<QbbChannel>(dev->GetChannel());
+                    if (!ch) continue;
+                    uint64_t delay_ns = ch->GetDelay().GetNanoSeconds();
+                    uint64_t rate_bps = dev->GetDataRate().GetBitRate();
+                    uint64_t hdrm_b = rate_bps / 1000000000ULL * delay_ns / 8 * 2
+                                      + 2 * MTU_BYTES;
+                    uint32_t hdrm_f = (uint32_t)((hdrm_b + FLIT_PAYLOAD - 1) / FLIT_PAYLOAD);
+                    sw->m_mmu->ConfigPortHeadroom(j, hdrm_f);
+                    headroomTotal += hdrm_f;
                 }
 
-                // 总预算 = mmu_pool_size(4096) + credit_init_global(256) × numPorts
-                uint32_t totalBudget = mmu_pool_size + (uint32_t)credit_init * numPorts;
-                uint32_t configPoolSize = (totalBudget > headroomTotal)
-                                          ? (totalBudget - headroomTotal)
-                                          : (totalBudget / 2);
+                // 共享池 = mmu_pool_size - headroom_total（headroom 从池内划出）
+                uint32_t sharedPool = (mmu_pool_size > headroomTotal)
+                                      ? (mmu_pool_size - headroomTotal)
+                                      : (mmu_pool_size / 2);
 
-                sw->m_mmu->ConfigPool(configPoolSize, mmu_min_guarantee);
+                sw->m_mmu->ConfigPool(mmu_pool_size, mmu_min_guarantee);
                 sw->m_mmu->SetNode(GetPointer(sw));
 
-                // XOFF/XON 基于共享池（不含 headroom 区）
+                // XOFF/XON 基于共享池（不含 headroom 区域）
                 if (enable_pfc) {
-                    uint32_t perPortShare = configPoolSize / numPorts;
+                    uint32_t perPortShare = sharedPool / numPorts;
                     uint32_t xoff = (uint32_t)(perPortShare * pfc_high_threshold);
                     uint32_t xon  = (uint32_t)(perPortShare * pfc_low_threshold);
                     sw->m_mmu->ConfigPfcThresholds(xoff, xon);
 
                     std::cerr << "Switch " << i
-                              << ": totalBudget=" << totalBudget
+                              << ": pool=" << mmu_pool_size
                               << " headroomTotal=" << headroomTotal
-                              << " configPool=" << configPoolSize
+                              << " sharedPool=" << sharedPool
                               << " perPort=" << perPortShare
                               << " XOFF=" << xoff << " XON=" << xon << "\n";
                 }
