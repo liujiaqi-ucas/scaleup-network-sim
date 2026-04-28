@@ -5,43 +5,51 @@ nohup: ignoring input
 
 
 [1/160] pfc | allreduce | 0.5mb | BER=0.000001
-  OK: id=536717653 flows=112 errors=0
+  OK: id=679740718 flows=112 errors=0
 0 retrans=N/A ✓
 
 [2/160] pfc | alltoall | 0.5mb | BER=0.000001
-  OK: id=48862199 flows=56 errors=0
+  OK: id=277926500 flows=56 errors=0
 0 retrans=N/A ✓
 
 [3/160] pfc | allreduce | 1mb | BER=0.000001
-  OK: id=498846602 flows=112 errors=0
+  OK: id=548880247 flows=112 errors=0
 0 retrans=N/A ✓
 
 [4/160] pfc | alltoall | 1mb | BER=0.000001
-  OK: id=73315567 flows=56 errors=0
+  OK: id=129898419 flows=56 errors=0
 0 retrans=N/A ✓
 
 [5/160] pfc | allreduce | 4mb | BER=0.000001
-  OK: id=395546501 flows=112 errors=0
+  OK: id=51979335 flows=112 errors=0
 0 retrans=N/A ✓
 
 [6/160] pfc | alltoall | 4mb | BER=0.000001
-  OK: id=112162158 flows=56 errors=0
+  OK: id=419240140 flows=56 errors=0
 0 retrans=N/A ✓
 
 [7/160] pfc | allreduce | 16mb | BER=0.000001
-  OK: id=331451666 flows=112 errors=0
+  OK: id=656399484 flows=112 errors=0
 0 retrans=N/A ✓
 
 [8/160] pfc | alltoall | 16mb | BER=0.000001
-  OK: id=523401197 flows=56 errors=0
+  OK: id=126649728 flows=56 errors=0
 0 retrans=N/A ✓
 
 [9/160] pfc | allreduce | 64mb | BER=0.000001
-  OK: id=470833217 flows=112 errors=0
+  OK: id=980454419 flows=112 errors=0
 0 retrans=N/A ✓
 
 [10/160] pfc | alltoall | 64mb | BER=0.000001
-  OK: id=790361066 flows=56 errors=0
+  OK: id=549112167 flows=56 errors=0
 0 retrans=N/A ✓
 
 [11/160] pfc | allreduce | 128mb | BER=0.000001
+  OK: id=552973900 flows=112 errors=0
+0 retrans=N/A ✓
+
+[12/160] pfc | alltoall | 128mb | BER=0.000001
+  OK: id=84551053 flows=56 errors=0
+0 retrans=N/A ✓
+
+[13/160] pfc | allreduce | 256mb | BER=0.000001
