@@ -1,0 +1,39 @@
+nohup: ignoring input
+协议: pfc  PFC=1  pool=4096  credit=256
+实验总数: 160 (10 BER × 9 消息 × 2 流量)
+输出: experiments_h100_ber/pfc/results.csv
+
+
+[1/160] pfc | allreduce | 0.5mb | BER=0.000001
+  OK: id=660262778 flows=112 errors=0
+0 retrans=N/A ✓
+
+[2/160] pfc | alltoall | 0.5mb | BER=0.000001
+  OK: id=620353918 flows=56 errors=0
+0 retrans=N/A ✓
+
+[3/160] pfc | allreduce | 1mb | BER=0.000001
+  OK: id=649232357 flows=112 errors=0
+0 retrans=N/A ✓
+
+[4/160] pfc | alltoall | 1mb | BER=0.000001
+  OK: id=794887962 flows=56 errors=0
+0 retrans=N/A ✓
+
+[5/160] pfc | allreduce | 4mb | BER=0.000001
+  OK: id=983022598 flows=112 errors=0
+0 retrans=N/A ✓
+
+[6/160] pfc | alltoall | 4mb | BER=0.000001
+  OK: id=64928622 flows=53 errors=0
+0 retrans=N/A ✓
+
+[7/160] pfc | allreduce | 16mb | BER=0.000001
+  OK: id=302749662 flows=112 errors=0
+0 retrans=N/A ✓
+
+[8/160] pfc | alltoall | 16mb | BER=0.000001
+  OK: id=238440077 flows=3 errors=0
+0 retrans=N/A ✓
+
+[9/160] pfc | allreduce | 64mb | BER=0.000001

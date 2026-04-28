@@ -61,7 +61,7 @@ BER_RATES="
 0.000000000000001
 "
 
-MSG_SIZES="0.5mb 1mb 4mb 16mb 64mb 128mb 256mb 512mb 1024mb"
+MSG_SIZES="0.5mb 1mb 4mb 16mb 64mb 128mb 256mb 512mb "
 TRAFFICS="allreduce alltoall"
 
 # simtime: 流量全部完成所需的仿真时长 (秒)

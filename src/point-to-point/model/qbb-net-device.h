@@ -167,6 +167,7 @@ public:
     const uint16_t MAX_VALID_WINDOW = 32768;
     uint32_t m_bufferSize;    // 接收端重排序缓冲区容量(flit数), 必须等于初始credit
     uint32_t m_creditInit;    // 初始 credit (= m_bufferSize)
+    uint32_t GetCreditInit() const { return m_creditInit; }
     Time m_rtoValue;          // RTO 超时值
 
     // PFC 模式状态

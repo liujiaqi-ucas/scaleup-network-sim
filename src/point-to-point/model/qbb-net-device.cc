@@ -793,9 +793,8 @@ void QbbNetDevice::generteStandaloneControl() {
             // 等发完这个包，TransmitComplete 会再次调用 DequeueAndTransmit 处理剩下的。
             return; 
         }
-        // 补充情况：如果没有 ACK/NAK，但有 Credit 急需发送 (避免死锁)
-    // 如果 creditflag 为 true，且上面循环没触发发送
-    if (creditflag) {
+        // 补充情况：仅 CBFC 模式需要单独发送 Credit Update
+    if (!m_qbbEnabled && creditflag) {
         //std::cout<<"Node  "<<m_node->GetId()<<" device "<<m_ifIndex<<"目前只有信用需要单独发送，m_rxCumulativeFreed是   "<<m_rxCumulativeFreed<<std::endl;
         // 随便找一个 VC (通常是 0) 发送纯 Credit Update
         p = Create<Packet>(0);
@@ -903,7 +902,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         return;
     }
     // slidingWindow 安全帽：防止 PAUSE 丢失时 OOM
-    if (m_qbbEnabled && m_slidingWindow.size() >= 512) {
+    if (m_qbbEnabled && (int)m_slidingWindow.size() >= m_bufferSize) {
         return;
     }
     // 再检查有没有没切完的包
@@ -1070,7 +1069,7 @@ void QbbNetDevice::DequeueAndTransmit(void) {
         return;
     }
     // Switch 侧 slidingWindow 安全帽
-    if (m_qbbEnabled && m_slidingWindow.size() >= 512) {
+    if (m_qbbEnabled && (int)m_slidingWindow.size() >= m_bufferSize) {
         return;
     }
     // =================================================================
@@ -1260,8 +1259,8 @@ void QbbNetDevice::TryForwardingRxBuffer() {
             // 转发成功！丢弃这个 Flit，看下一个
             m_readyQueue.pop();
             m_rxStalled = false;
-            creditflag = true; // 转发成功了，说明对端已经有机会收到包了，可能会有 ACK/NAK 和 Credit 要发了
-            m_rxCumulativeFreed++; // 这个是我接收端释放的计数，捎带更新一下
+            if (!m_qbbEnabled) creditflag = true; // CBFC 模式才需要通告 credit
+            m_rxCumulativeFreed++;
             // PFC 由 SwitchNode egress 管理，此处无需检查
         }
         else if (status == BLOCKED_BY_LOCK || status == BLOCKED_BY_MMU) {
